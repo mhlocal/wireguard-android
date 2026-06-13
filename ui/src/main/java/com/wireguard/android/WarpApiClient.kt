@@ -1,6 +1,5 @@
 package com.wireguard.android
 
-import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,85 +11,70 @@ import java.net.URL
 
 class WarpApiClient {
 
-    companion object {
-        private const val TAG = "WarpApiClient"
-        private const val PRIMARY_API_ENDPOINT = "https://boxvpn.netlify.app/v0a884/reg"
-        private const val FALLBACK_API_ENDPOINT = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg"
-        private const val CONNECTION_TIMEOUT_MS = 5000
-    }
+    fun generateWarpConfig(onResult: (String, String, String) -> Unit, onError: (String) -> Unit) {
+        val primaryApiUrl = "https://boxvpn.netlify.app/v0a884/reg" 
+        val backupApiUrl = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg"  
 
-    fun fetchConfiguration(
-        onSuccess: (privateKey: String, address: String, endpoint: String) -> Unit,
-        onFailure: (errorMessage: String) -> Unit
-    ) {
         CoroutineScope(Dispatchers.IO).launch {
+            var lastErrorMessage = "Unknown Error"
+            
+            // ၁။ ပထမ API စမ်းခေါ်ခြင်း
             try {
-                Log.d(TAG, "Initiating configuration fetch from primary endpoint.")
-                val response = executeNetworkRequest(PRIMARY_API_ENDPOINT)
-                processConfigResponse(response, onSuccess)
+                Log.d("WarpApi", "Attempting Primary API: $primaryApiUrl")
+                val response = makeNetworkRequest(primaryApiUrl)
+                parseAndReturnResult(response, onResult)
+                return@launch // အောင်မြင်ရင် ဒီမှာတင်ပြီးဆုံး
+            } catch (e: Exception) {
+                lastErrorMessage = e.message ?: "Primary API Failed"
+                Log.e("WarpApi", "Primary API Error: $lastErrorMessage")
+            }
 
-            } catch (primaryException: Exception) {
-                Log.w(TAG, "Primary endpoint unavailable: ${primaryException.message}. Attempting fallback.")
-                
-                try {
-                    val fallbackResponse = executeNetworkRequest(FALLBACK_API_ENDPOINT)
-                    processConfigResponse(fallbackResponse, onSuccess)
-                    
-                } catch (fallbackException: Exception) {
-                    Log.e(TAG, "All configuration endpoints failed.", fallbackException)
-                    withContext(Dispatchers.Main) {
-                        onFailure("Failed to connect to required services. Please check your network connection.")
-                    }
-                }
+            // ၂။ ဒုတိယ API စမ်းခေါ်ခြင်း (ပထမတစ်ခု မရမှ)
+            try {
+                Log.d("WarpApi", "Attempting Backup API: $backupApiUrl")
+                val response = makeNetworkRequest(backupApiUrl)
+                parseAndReturnResult(response, onResult)
+                return@launch // အောင်မြင်ရင် ဒီမှာတင်ပြီးဆုံး
+            } catch (e: Exception) {
+                lastErrorMessage = e.message ?: "Backup API Failed"
+                Log.e("WarpApi", "Backup API Error: $lastErrorMessage")
+            }
+
+            // ၃။ နှစ်ခုစလုံးမရမှသာ onError ကိုခေါ်ပါ
+            withContext(Dispatchers.Main) {
+                onError("Please check internet connection.")
             }
         }
     }
 
-    private fun executeNetworkRequest(endpointUrl: String): String {
-        val url = URL(endpointUrl)
+    private fun makeNetworkRequest(urlString: String): String {
+        val url = URL(urlString)
         val connection = url.openConnection() as HttpURLConnection
-        
-        connection.apply {
-            requestMethod = "GET"
-            connectTimeout = CONNECTION_TIMEOUT_MS
-            readTimeout = CONNECTION_TIMEOUT_MS
-            
-            // Appending standard App headers to prevent bot-detection
-            val userAgent = "WireGuard/${Build.VERSION.RELEASE} (Android ${Build.VERSION.SDK_INT}; ${Build.MANUFACTURER} ${Build.MODEL})"
-            setRequestProperty("User-Agent", userAgent)
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Connection", "Keep-Alive")
-        }
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 8000 // Timeout ကို ၈ စက္ကန့်အထိ တိုးပေးလိုက်ပါ
+        connection.readTimeout = 8000
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0") // API တွေက Bot လို့ထင်ပြီး ပိတ်ထားတာမျိုးဖြစ်တတ်လို့ ဒါလေးထည့်ပေးပါ
         
         val responseCode = connection.responseCode
         if (responseCode == HttpURLConnection.HTTP_OK) {
             return connection.inputStream.bufferedReader().use { it.readText() }
         } else {
-            throw Exception("Server responded with HTTP code: $responseCode")
+            throw Exception("HTTP Error: $responseCode")
         }
     }
 
-    private suspend fun processConfigResponse(
-        responsePayload: String, 
-        onSuccess: (String, String, String) -> Unit
-    ) {
-        try {
-            val jsonObject = JSONObject(responsePayload)
-            
-            val privateKey = jsonObject.optString("private_key", "")
-            val address = jsonObject.optString("address", "")
-            val endpoint = jsonObject.optString("endpoint", "162.159.192.1:2408")
-            
-            if (privateKey.isNotBlank() && address.isNotBlank()) {
-                withContext(Dispatchers.Main) {
-                    onSuccess(privateKey, address, endpoint)
-                }
-            } else {
-                throw Exception("Malformed configuration payload received.")
+    private suspend fun parseAndReturnResult(responseString: String, onResult: (String, String, String) -> Unit) {
+        val jsonObject = JSONObject(responseString)
+        val privateKey = jsonObject.optString("private_key", "")
+        val address = jsonObject.optString("address", "")
+        val endpoint = jsonObject.optString("endpoint", "162.159.192.1:500")
+        
+        if (privateKey.isNotEmpty() && address.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                onResult(privateKey, address, endpoint)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Payload parsing error", e)
-            throw e 
+        } else {
+            throw Exception("Empty data in JSON")
         }
     }
 }
