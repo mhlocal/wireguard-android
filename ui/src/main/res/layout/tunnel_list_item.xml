@@ -61,7 +61,9 @@
                 android:textColor="@{item.state == State.UP ? Color.parseColor(`#00C853`) : Color.parseColor(`#808080`)}"
                 android:nextFocusLeft="@+id/tunnel_list_item"
                 app:checked="@{item.state == State.UP}"
-                app:onBeforeCheckedChanged="@{fragment::setTunnelState}"
+                
+                app:onBeforeCheckedChanged="@{(v, isChecked) -> fragment.onSwitchToggled(isChecked, item)}"
+                
                 tools:checked="true" />
 
         </LinearLayout>
