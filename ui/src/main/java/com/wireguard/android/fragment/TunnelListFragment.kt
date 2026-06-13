@@ -4,8 +4,10 @@
  */
 package com.wireguard.android.fragment
 
+import android.app.Activity
 import android.content.Intent
 import android.content.res.Resources
+import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -57,6 +59,23 @@ class TunnelListFragment : BaseFragment() {
     private var actionMode: ActionMode? = null
     private var backPressedCallback: OnBackPressedCallback? = null
     private var binding: TunnelListFragmentBinding? = null
+
+    // VPN Permission ကို ခေတ္တမှတ်ထားရန်
+    private var pendingTunnelToConnect: ObservableTunnel? = null
+
+    // ---------------------------------------------------------------------------------
+    // OS မှ VPN Permission တောင်းခံမှုကို လက်ခံမည့် လုပ်ငန်းစဉ်
+    // ---------------------------------------------------------------------------------
+    private val vpnPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            // Permission ရရှိပါက ရပ်နားထားသော VPN ကို ဆက်ချိတ်ပါမည်
+            pendingTunnelToConnect?.let { connectTunnel(it) }
+        } else {
+            Toast.makeText(context, "VPN Permission Denied!", Toast.LENGTH_SHORT).show()
+            binding?.tunnelList?.adapter?.notifyDataSetChanged() // Switch ကို မူလအတိုင်း ပြန်ထားရန်
+        }
+        pendingTunnelToConnect = null
+    }
 
     private val tunnelFileImportResultLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { data ->
         if (data == null) return@registerForActivityResult
@@ -145,7 +164,60 @@ class TunnelListFragment : BaseFragment() {
         return binding?.root
     }
 
-    // WARP Config အသစ်ထုတ်ပြီး VPN ချိတ်ဆက်မည့် Function
+    // ---------------------------------------------------------------------------------
+    // VPN ချိတ်ဆက်ခြင်းနှင့် အင်တာနက် (Ping) စစ်ဆေးခြင်း ပင်မလုပ်ငန်းစဉ် (ပေါင်းစည်းထားသည်)
+    // ---------------------------------------------------------------------------------
+    private fun connectTunnel(tunnel: ObservableTunnel) {
+        val safeContext = context ?: return
+        val safeActivity = activity ?: return
+
+        // ၁။ ဖုန်း၏ VPN Permission ရှိ/မရှိ အရင်စစ်ဆေးပါမည်
+        val vpnIntent = VpnService.prepare(safeContext)
+        if (vpnIntent != null) {
+            // Permission မရှိသေးပါက တောင်းခံရန် OS Dialog ကို ပြသပါမည်
+            pendingTunnelToConnect = tunnel
+            vpnPermissionLauncher.launch(vpnIntent)
+            return
+        }
+
+        // ၂။ Permission ရှိပါက VPN ကို စတင် ချိတ်ဆက်ပါမည်
+        val tunnelManager = Application.getTunnelManager()
+        lifecycleScope.launch {
+            Toast.makeText(safeContext, "Connecting... Checking internet...", Toast.LENGTH_SHORT).show()
+            try {
+                tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+
+                withContext(Dispatchers.IO) {
+                    delay(2500) // VPN လမ်းကြောင်းပွင့်ရန် ခဏစောင့်ပါမည်
+                    try {
+                        val ipAddr = InetAddress.getByName("1.1.1.1")
+                        val isInternetWorking = ipAddr.isReachable(3000)
+
+                        safeActivity.runOnUiThread {
+                            if (isInternetWorking) {
+                                Toast.makeText(safeContext, "Connected Successfully!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(safeContext, "No Internet! Disconnecting...", Toast.LENGTH_LONG).show()
+                                lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        safeActivity.runOnUiThread {
+                            Toast.makeText(safeContext, "Connection Failed! Disconnecting...", Toast.LENGTH_LONG).show()
+                            lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(safeContext, "Failed to start VPN", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "Failed to start VPN", e)
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------
+    // WARP Config အသစ်ထုတ်ပြီးနောက် VPN သို့ လွှဲပြောင်းချိတ်ဆက်မည့် Function
+    // ---------------------------------------------------------------------------------
     private fun generateWarpConfigAndConnect() {
         val safeContext = context ?: return
         val safeActivity = activity ?: return
@@ -182,31 +254,9 @@ class TunnelListFragment : BaseFragment() {
                             }
                             
                             val tunnel = tunnelManager.create("WARP", wgConfig)
-                            tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                            
-                            Toast.makeText(safeContext, "Connecting... Checking internet...", Toast.LENGTH_LONG).show()
+                            // Config ထုတ်ပြီးပါက ပင်မ Connect Function သို့ လွှဲပေးလိုက်ပါမည်
+                            connectTunnel(tunnel)
 
-                            withContext(Dispatchers.IO) {
-                                delay(2500)
-                                try {
-                                    val ipAddr = InetAddress.getByName("1.1.1.1")
-                                    val isInternetWorking = ipAddr.isReachable(4000) 
-
-                                    safeActivity.runOnUiThread {
-                                        if (isInternetWorking) {
-                                            Toast.makeText(safeContext, "Connected Successfully!", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            Toast.makeText(safeContext, "No internet access! Disconnecting...", Toast.LENGTH_LONG).show()
-                                            lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    safeActivity.runOnUiThread {
-                                        Toast.makeText(safeContext, "Connection Failed! Disconnecting...", Toast.LENGTH_LONG).show()
-                                        lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
-                                    }
-                                }
-                            }
                         } catch (e: Exception) {
                             Log.e("WARP", "Tunnel creation failed", e)
                             Toast.makeText(safeContext, "Failed to create VPN", Toast.LENGTH_SHORT).show()
@@ -224,46 +274,19 @@ class TunnelListFragment : BaseFragment() {
         )
     }
 
-    // Switch အဖွင့်/အပိတ် လုပ်သည့်အခါ အင်တာနက် စစ်ဆေးမည့် Function
+    // ---------------------------------------------------------------------------------
+    // Switch ခလုတ်ကို နှိပ်သည့်အခါ အလုပ်လုပ်မည့် Function
+    // ---------------------------------------------------------------------------------
     fun onSwitchChanged(view: View, checked: Boolean) {
-        val safeContext = context ?: return
-        val safeActivity = activity ?: return
         val tunnel = view.tag as? ObservableTunnel ?: return 
-        val tunnelManager = Application.getTunnelManager()
-        
-        lifecycleScope.launch {
-            if (checked) {
-                Toast.makeText(safeContext, "Connecting...", Toast.LENGTH_SHORT).show()
+        if (checked) {
+            // Switch ကို ဖွင့်ပါက ပင်မ Connect Function ကို လှမ်းခေါ်ပါမည်
+            connectTunnel(tunnel)
+        } else {
+            // Switch ကို ပိတ်ပါက VPN ကို ပိတ်ပါမည်
+            lifecycleScope.launch {
                 try {
-                    tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                    
-                    withContext(Dispatchers.IO) {
-                        delay(2500)
-                        try {
-                            val ipAddr = InetAddress.getByName("1.1.1.1")
-                            val isInternetWorking = ipAddr.isReachable(3000)
-                            
-                            safeActivity.runOnUiThread {
-                                if (isInternetWorking) {
-                                    Toast.makeText(safeContext, "Connected Successfully!", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(safeContext, "No Internet! Disconnecting...", Toast.LENGTH_LONG).show()
-                                    lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            safeActivity.runOnUiThread {
-                                Toast.makeText(safeContext, "Connection Failed! Disconnecting...", Toast.LENGTH_LONG).show()
-                                lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Toast.makeText(safeContext, "Failed to start VPN", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                try {
-                    tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN)
+                    Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.DOWN)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to stop VPN", e)
                 }
@@ -456,13 +479,10 @@ class TunnelListFragment : BaseFragment() {
                 context, if (show) R.anim.scale_up else R.anim.scale_down
             )
             animation.setAnimationListener(object : Animation.AnimationListener {
-                override fun onAnimationRepeat(animation: Animation?) {
-                }
-
+                override fun onAnimationRepeat(animation: Animation?) {}
                 override fun onAnimationEnd(animation: Animation?) {
                     if (!show) view.visibility = View.GONE
                 }
-
                 override fun onAnimationStart(animation: Animation?) {
                     if (show) view.visibility = View.VISIBLE
                 }
