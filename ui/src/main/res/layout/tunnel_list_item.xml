@@ -1,15 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-  ~ Copyright © 2017-2025 WireGuard LLC. All Rights Reserved.
-  ~ SPDX-License-Identifier: Apache-2.0
-  -->
+<?xml version="1.0" encoding="utf-8"?>
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
 
     <data>
-
         <import type="com.wireguard.android.model.ObservableTunnel" />
-
         <import type="com.wireguard.android.backend.Tunnel.State" />
 
         <variable
@@ -38,14 +33,14 @@
         android:focusable="true"
         android:nextFocusRight="@+id/tunnel_switch"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="8dp">
+        android:paddingVertical="12dp">
 
         <TextView
             android:id="@+id/tunnel_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"
+            android:layout_alignParentTop="true"
             android:ellipsize="end"
             android:maxLines="1"
             android:text="@{key}"
@@ -56,11 +51,14 @@
             android:id="@+id/tunnel_switch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
+            android:layout_below="@+id/tunnel_name"
+            android:layout_alignParentStart="true"
+            android:layout_marginTop="8dp"
+            android:text="@{item.state == State.UP ? `Connected` : `Connect`}"
             android:nextFocusLeft="@+id/tunnel_list_item"
             app:checked="@{item.state == State.UP}"
             app:onBeforeCheckedChanged="@{fragment::setTunnelState}"
             tools:checked="@sample/interface_names.json/names/checked/checked" />
+
     </com.wireguard.android.widget.MultiselectableRelativeLayout>
 </layout>
