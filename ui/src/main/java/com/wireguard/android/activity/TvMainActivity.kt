@@ -58,7 +58,7 @@ import java.io.File
 import androidx.lifecycle.lifecycleScope
 import com.wireguard.config.Config
 import com.wireguard.config.Interface
-import com.wireguard.config.peer
+import com.wireguard.config.Peer
 import com.wireguard.android.WarpApiClient
 
 class TvMainActivity : AppCompatActivity() {
