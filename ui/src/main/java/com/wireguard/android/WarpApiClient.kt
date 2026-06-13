@@ -1,6 +1,5 @@
 package com.wireguard.android
 
-import android.util.Log
 import com.wireguard.crypto.KeyPair
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,7 +26,6 @@ class WarpApiClient {
 
         val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
 
-        // Cloudflare က လက်ခံစေရန် Headers များ ထပ်မံထည့်သွင်းထားပါသည်
         val request = Request.Builder()
             .url("https://api.cloudflareclient.com/v0a884/reg")
             .addHeader("User-Agent", "okhttp/3.12.1")
@@ -41,7 +39,7 @@ class WarpApiClient {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                val responseData = response.body?.string() ?: ""
+                val responseData = response.body?.string() ?: "Empty Response"
                 
                 if (response.isSuccessful) {
                     try {
@@ -54,13 +52,15 @@ class WarpApiClient {
 
                         onResult(privateKeyBase64, address, endpoint)
                     } catch (e: Exception) {
-                        // JSON Parse Error ထပ်ဖြစ်ပါက အကြောင်းရင်းတိကျစွာ သိနိုင်ရန်
-                        Log.e("WARP", "Parse Error. Raw API Response: $responseData")
-                        onError("JSON Error: ${e.message}")
+                        // JSON Error တက်ပါက Cloudflare ပြန်ပို့သော စာသားအစစ်ကို ဖန်သားပြင်တွင် ပြပါမည်
+                        // စာသားအရမ်းရှည်ပါက အစပိုင်းကိုသာ ဖြတ်ယူပါမည်
+                        val shortResponse = if (responseData.length > 200) responseData.substring(0, 200) + "..." else responseData
+                        onError("Reply: $shortResponse")
                     }
                 } else {
-                    Log.e("WARP", "HTTP Error. Code: ${response.code}, Raw Response: $responseData")
-                    onError("API Error Code: ${response.code}")
+                    // HTTP 403 စသည်ဖြင့် Error တက်ပါကလည်း စာသားအစစ်ကို ပြပါမည်
+                    val shortResponse = if (responseData.length > 200) responseData.substring(0, 200) + "..." else responseData
+                    onError("HTTP ${response.code}: $shortResponse")
                 }
             }
         })
