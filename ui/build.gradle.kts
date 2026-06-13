@@ -14,6 +14,24 @@ android {
         dataBinding = true
         viewBinding = true
     }
+
+   // Version နှစ်မျိုးခွဲမည်ဟု သတ်မှတ်ခြင်း
+    flavorDimensions "device"
+
+    productFlavors {
+        mobile {
+            dimension "device"
+            // ဖုန်းအတွက် သီးသန့် Application ID (ဥပမာ)
+            // applicationIdSuffix ".mobile" 
+        }
+        tv {
+            dimension "device"
+            // TV အတွက် သီးသန့် Application ID (TV စတိုးတင်ရန် အဆင်ပြေစေရန်)
+            applicationIdSuffix ".tv"
+        }
+    }
+
+
     namespace = pkg
     defaultConfig {
         applicationId = pkg
@@ -78,6 +96,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     coreLibraryDesugaring(libs.desugarJdkLibs)
 }
+
+
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Xlint:unchecked")
