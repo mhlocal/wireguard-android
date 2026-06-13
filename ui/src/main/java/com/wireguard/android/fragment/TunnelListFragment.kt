@@ -42,6 +42,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import com.wireguard.android.WarpApiClient
+import com.wireguard.config.Config
+import com.wireguard.config.Interface
+import com.wireguard.config.Peer
+import com.wireguard.android.backend.Tunnel
 
 /**
  * Fragment containing a list of known WireGuard tunnels. It allows creating and deleting tunnels.
@@ -102,27 +107,60 @@ class TunnelListFragment : BaseFragment() {
         val bottomSheet = AddTunnelsSheet()
         binding?.apply {
             createFab.setOnClickListener {
-                if (childFragmentManager.findFragmentByTag("BOTTOM_SHEET") != null)
-                    return@setOnClickListener
-                childFragmentManager.setFragmentResultListener(AddTunnelsSheet.REQUEST_KEY_NEW_TUNNEL, viewLifecycleOwner) { _, bundle ->
-                    when (bundle.getString(AddTunnelsSheet.REQUEST_METHOD)) {
-                        AddTunnelsSheet.REQUEST_CREATE -> {
-                            startActivity(Intent(requireActivity(), TunnelCreatorActivity::class.java))
-                        }
+                binding.createFab.setOnClickListener {
+            // ခလုတ်နှိပ်လိုက်ကြောင်း သိသာစေရန် စာသားအရင်ပြပါမည်
+            Toast.makeText(requireContext(), "Generating WARP Config...", Toast.LENGTH_SHORT).show()
 
-                        AddTunnelsSheet.REQUEST_IMPORT -> {
-                            tunnelFileImportResultLauncher.launch("*/*")
-                        }
+            val warpApi = WarpApiClient()
+            warpApi.generateWarpConfig(
+                onResult = { privateKey, address, endpoint ->
+                    try {
+                        val configBuilder = Config.Builder()
+                        val interfaceBuilder = Interface.Builder()
+                        interfaceBuilder.parsePrivateKey(privateKey)
+                        interfaceBuilder.parseAddresses(address)
+                        interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+                        interfaceBuilder.parseMtu("1280") 
 
-                        AddTunnelsSheet.REQUEST_SCAN -> {
-                            qrImportResultLauncher.launch(
-                                ScanOptions()
-                                    .setOrientationLocked(false)
-                                    .setBeepEnabled(false)
-                                    .setPrompt(getString(R.string.qr_code_hint))
-                            )
+                        val peerBuilder = Peer.Builder()
+                        peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+                        peerBuilder.parseEndpoint(endpoint)
+                        peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+                        peerBuilder.parsePersistentKeepalive("25") 
+
+                        configBuilder.setInterface(interfaceBuilder.build())
+                        configBuilder.addPeer(peerBuilder.build())
+                        val wgConfig = configBuilder.build()
+
+                        // Fragment အတွက်ဖြစ်၍ viewLifecycleOwner ကို အသုံးပြုပါသည်
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            try {
+                                val tunnelManager = Application.getTunnelManager()
+                                val existingTunnel = tunnelManager.getTunnels()["WARP"]
+                                if (existingTunnel != null) {
+                                    tunnelManager.delete(existingTunnel)
+                                }
+                                val tunnel = tunnelManager.create("WARP", wgConfig)
+                                tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+                                
+                                Toast.makeText(requireContext(), "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Log.e("WARP", "Tunnel creation failed", e)
+                                Toast.makeText(requireContext(), "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.e("WARP", "Config Error: ${e.message}")
                     }
+                },
+                onError = { errorMessage ->
+                    // UI Thread ပေါ်တွင် Error Message ပြပါမည်
+                    requireActivity().runOnUiThread {
+                        Toast.makeText(requireContext(), "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
                 }
                 bottomSheet.showNow(childFragmentManager, "BOTTOM_SHEET")
             }
