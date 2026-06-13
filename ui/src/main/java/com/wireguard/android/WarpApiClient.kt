@@ -14,7 +14,7 @@ class WarpApiClient {
     fun generateWarpConfig(onResult: (String, String, String) -> Unit, onError: (String) -> Unit) {
         
         // ⚠️ သင့်ရဲ့ တကယ့် API Link (၂) ခုကို ဒီနေရာမှာ အစားထိုးထည့်ပါ ⚠️
-        val primaryApiUrl = "https://api1.yourdomain.com/get-warp" 
+        val primaryApiUrl = "https://boxvpn.netlify.app/v0a884/reg" 
         val backupApiUrl = "https://api2.yourdomain.com/get-warp"  
 
         CoroutineScope(Dispatchers.IO).launch {
