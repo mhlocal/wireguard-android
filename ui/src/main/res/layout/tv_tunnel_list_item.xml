@@ -7,7 +7,9 @@
         <import type="android.view.View" />
         <import type="com.wireguard.android.model.ObservableTunnel" />
         <import type="com.wireguard.android.backend.Tunnel.State" />
-        <import type="android.graphics.Color" /> <variable
+        <import type="android.graphics.Color" /> 
+        
+        <variable
             name="isDeleting"
             type="androidx.databinding.ObservableBoolean" />
 
