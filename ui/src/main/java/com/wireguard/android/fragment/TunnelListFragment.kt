@@ -5,6 +5,7 @@
 package com.wireguard.android.fragment
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.Resources
 import android.net.VpnService
@@ -60,26 +61,22 @@ class TunnelListFragment : BaseFragment() {
     private var backPressedCallback: OnBackPressedCallback? = null
     private var binding: TunnelListFragmentBinding? = null
 
-    // VPN Permission တောင်းခံရန် သိမ်းထားမည့် နေရာ
     private var pendingTunnelToConnect: ObservableTunnel? = null
-    
-    // Connecting အခြေအနေကို မှတ်သားထားမည့် နေရာ (UI အရောင်ပြောင်းရန်)
     private val connectingTunnels = mutableSetOf<String>()
 
-    // XML ဖိုင်မှ ဤ Function ကိုလှမ်းခေါ်၍ Connecting စာသား ပြ/မပြ ဆုံးဖြတ်ပါမည်
+    // Loading ပြသမည့် Box
+    private var loadingDialog: AlertDialog? = null
+
     fun isConnecting(tunnel: ObservableTunnel): Boolean {
         return connectingTunnels.contains(tunnel.name)
     }
 
-    // UI ပေါ်ရှိ စာသားကို Connecting နှင့် Connected အဖြစ် အလိုအလျောက် ပြောင်းပေးမည့် Function
     private fun setConnectingState(tunnel: ObservableTunnel, isConnecting: Boolean) {
         if (isConnecting) {
             connectingTunnels.add(tunnel.name)
         } else {
             connectingTunnels.remove(tunnel.name)
         }
-        
-        // မျက်နှာပြင်ရှိ ခလုတ်စာသား အရောင်များကို Update လုပ်ခိုင်းပါမည်
         lifecycleScope.launch {
             val tunnels = Application.getTunnelManager().getTunnels()
             val position = tunnels.indexOf(tunnel)
@@ -87,6 +84,24 @@ class TunnelListFragment : BaseFragment() {
                 binding?.tunnelList?.adapter?.notifyItemChanged(position)
             }
         }
+    }
+
+    // ---------------------------------------------------------------------------------
+    // "Please wait loading..." ပြသမည့် Function များ
+    // ---------------------------------------------------------------------------------
+    private fun showLoadingDialog() {
+        val safeContext = context ?: return
+        val builder = AlertDialog.Builder(safeContext)
+        builder.setTitle("Generating Config")
+        builder.setMessage("Please wait loading...")
+        builder.setCancelable(false) // အပြင်ဘက်ကိုနှိပ်၍ ပိတ်ခွင့်မပေးပါ
+        loadingDialog = builder.create()
+        loadingDialog?.show()
+    }
+
+    private fun hideLoadingDialog() {
+        loadingDialog?.dismiss()
+        loadingDialog = null
     }
 
     private val vpnPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -139,6 +154,14 @@ class TunnelListFragment : BaseFragment() {
                 for (i in checkedItems) actionModeListener.setItemChecked(i, true)
             }
         }
+
+        // App ဝင်တိုင်း Generate မလုပ်စေရန်၊ Config မရှိမှသာ တစ်ခါတည်း စစ်ဆေးပြီး Generate လုပ်ပါမည်
+        lifecycleScope.launch {
+            val tunnels = Application.getTunnelManager().getTunnels()
+            if (!tunnels.containsKey("WARP")) {
+                generateWarpConfigAndConnect()
+            }
+        }
     }
 
     override fun onCreateView(
@@ -185,9 +208,6 @@ class TunnelListFragment : BaseFragment() {
         return binding?.root
     }
 
-    // ---------------------------------------------------------------------------------
-    // VPN ချိတ်ဆက်ခြင်းနှင့် အင်တာနက် (Ping) စစ်ဆေးခြင်း ပင်မလုပ်ငန်းစဉ် 
-    // ---------------------------------------------------------------------------------
     private fun connectTunnel(tunnel: ObservableTunnel) {
         val safeContext = context ?: return
         val safeActivity = activity ?: return
@@ -201,11 +221,9 @@ class TunnelListFragment : BaseFragment() {
 
         val tunnelManager = Application.getTunnelManager()
         lifecycleScope.launch {
-            // ၁။ UI ပေါ်တွင် "Connecting..." (လိမ္မော်ရောင်) အဖြစ် စတင်ပြသပါမည်
             setConnectingState(tunnel, true)
 
             try {
-                // VPN စတင်ဖွင့်ပါမည်
                 tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
 
                 withContext(Dispatchers.IO) {
@@ -215,15 +233,12 @@ class TunnelListFragment : BaseFragment() {
                         val isInternetWorking = ipAddr.isReachable(3000)
 
                         safeActivity.runOnUiThread {
-                            // ၂။ Ping စစ်ဆေးပြီးပါက Connecting အခြေအနေကို ဖျက်ပါမည်
                             setConnectingState(tunnel, false)
 
                             if (!isInternetWorking) {
-                                // အင်တာနက်မရလျှင် ပြန်ပိတ်ချပါမည် (UI သည် "Connect" မီးခိုးရောင် ပြန်ဖြစ်သွားမည်)
                                 Toast.makeText(safeContext, "No Internet Access!", Toast.LENGTH_LONG).show()
                                 lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
                             }
-                            // အင်တာနက်ရလျှင် ဘာမှလုပ်စရာမလိုပါ။ UI သည် အလိုအလျောက် "Connected" (အစိမ်းရောင်) ဖြစ်နေပါမည်။
                         }
                     } catch (e: Exception) {
                         safeActivity.runOnUiThread {
@@ -236,15 +251,19 @@ class TunnelListFragment : BaseFragment() {
             } catch (e: Exception) {
                 setConnectingState(tunnel, false)
                 Toast.makeText(safeContext, "Failed to start VPN", Toast.LENGTH_SHORT).show()
-                Log.e(TAG, "Failed to start VPN", e)
             }
         }
     }
 
+    // ---------------------------------------------------------------------------------
+    // Config ကို API မှ ဆွဲယူမည့် Function 
+    // ---------------------------------------------------------------------------------
     private fun generateWarpConfigAndConnect() {
         val safeContext = context ?: return
+        val safeActivity = activity ?: return
         
-        Toast.makeText(safeContext, "Generating WARP Config...", Toast.LENGTH_SHORT).show()
+        // Generate စတင်ပြီဖြစ်၍ Loading Box ပြပါမည်
+        safeActivity.runOnUiThread { showLoadingDialog() }
 
         val warpApi = WarpApiClient()
         warpApi.generateWarpConfig(
@@ -276,19 +295,31 @@ class TunnelListFragment : BaseFragment() {
                             }
                             
                             val tunnel = tunnelManager.create("WARP", wgConfig)
+                            
+                            // အောင်မြင်သွားပါက Loading Box ပြန်ပိတ်ပါမည်
+                            safeActivity.runOnUiThread { hideLoadingDialog() }
+                            
+                            // တန်းပြီး ချိတ်ဆက်ပေးပါမည်
                             connectTunnel(tunnel)
 
                         } catch (e: Exception) {
-                            Toast.makeText(safeContext, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                            safeActivity.runOnUiThread {
+                                hideLoadingDialog()
+                                Toast.makeText(safeContext, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("WARP", "Config Error: ${e.message}")
+                    safeActivity.runOnUiThread {
+                        hideLoadingDialog()
+                    }
                 }
             },
             onError = { errorMessage ->
-                activity?.runOnUiThread {
-                    Toast.makeText(safeContext, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                safeActivity.runOnUiThread {
+                    // အင်တာနက်မရှိ၍ (သို့) API Error တက်ပါက Loading Box ပိတ်ပြီး သတိပေးစာ ပြပါမည်
+                    hideLoadingDialog()
+                    Toast.makeText(safeContext, "Please check internet connection.", Toast.LENGTH_LONG).show()
                 }
             }
         )
@@ -301,7 +332,6 @@ class TunnelListFragment : BaseFragment() {
         } else {
             lifecycleScope.launch {
                 try {
-                    // Switch ကို ပိတ်ပါက ချက်ချင်း ပိတ်ပေးပါမည်
                     setConnectingState(tunnel, false)
                     Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.DOWN)
                 } catch (e: Exception) {
@@ -351,17 +381,12 @@ class TunnelListFragment : BaseFragment() {
         binding!!.rowConfigurationHandler = object : RowConfigurationHandler<TunnelListItemBinding, ObservableTunnel> {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
-            /*    binding.root.setOnClickListener {
-                    if (actionMode == null) {
-                        selectedTunnel = item
-                    } else {
-                        actionModeListener.toggleItemChecked(position)
-                    }
-                }
+                
                 binding.root.setOnLongClickListener {
                     actionModeListener.toggleItemChecked(position)
                     true
-                }*/
+                }
+                
                 if (actionMode != null)
                     (binding.root as MultiselectableRelativeLayout).setMultiSelected(actionModeListener.checkedItems.contains(position))
                 else
