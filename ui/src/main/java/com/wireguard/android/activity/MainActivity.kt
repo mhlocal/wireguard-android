@@ -76,16 +76,13 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
                 Log.d("WARP", "Success! PrivateKey: $privateKey, IP: $address, Endpoint: $endpoint")
 
                 try {
-                    // ၁။ WireGuard Config အသစ်ကို Code ဖြင့် တည်ဆောက်ခြင်း
                     val configBuilder = Config.Builder()
-
                     val interfaceBuilder = Interface.Builder()
                     interfaceBuilder.parsePrivateKey(privateKey)
                     interfaceBuilder.parseAddresses(address)
                     interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
 
                     val peerBuilder = Peer.Builder()
-                    // Cloudflare WARP ၏ ပုံသေ Public Key ကို အသုံးပြုပါမည်
                     peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
                     peerBuilder.parseEndpoint(endpoint)
                     peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
@@ -94,27 +91,28 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
                     configBuilder.addPeer(peerBuilder.build())
                     val wgConfig = configBuilder.build()
 
-                    // ၂။ Main Thread (UI Thread) ပေါ်ပြောင်း၍ VPN ချိတ်ဆက်ခြင်း
-                    runOnUiThread {
-                        val tunnelManager = com.wireguard.android.Application.getTunnelManager()
+                    // Suspend Function များကို အသုံးပြုရန် Coroutine ဖြင့် Background တွင် အလုပ်လုပ်ခိုင်းခြင်း
+                    lifecycleScope.launch {
+                        try {
+                            val tunnelManager = com.wireguard.android.Application.getTunnelManager()
 
-                        // "WARP" အမည်ဖြင့် ရှိပြီးသား Tunnel ရှိလျှင် အရင်ဖျက်ပါမည်
-                        val existingTunnel = tunnelManager.getTunnels()["WARP"]
-                        if (existingTunnel != null) {
-                            tunnelManager.delete(existingTunnel)
-                        }
-
-                        // Tunnel အသစ်ဖန်တီး၍ တိုက်ရိုက် ချိတ်ဆက်ပါမည် (State.UP)
-                        tunnelManager.create("WARP", wgConfig).whenComplete { tunnel, exception ->
-                            if (exception == null && tunnel != null) {
-                                tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                                Toast.makeText(this@MainActivity, "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Log.e("WARP", "Tunnel creation failed", exception)
-                                Toast.makeText(this@MainActivity, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                            // "WARP" အမည်ဖြင့် ရှိပြီးသား Tunnel ရှိလျှင် အရင်ဖျက်ပါမည်
+                            val existingTunnel = tunnelManager.getTunnels()["WARP"]
+                            if (existingTunnel != null) {
+                                tunnelManager.delete(existingTunnel)
                             }
+
+                            // Tunnel အသစ်ဖန်တီး၍ တိုက်ရိုက် ချိတ်ဆက်ပါမည်
+                            val tunnel = tunnelManager.create("WARP", wgConfig)
+                            tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+                            
+                            Toast.makeText(this@MainActivity, "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("WARP", "Tunnel creation failed", e)
+                            Toast.makeText(this@MainActivity, "Failed to create VPN", Toast.LENGTH_SHORT).show()
                         }
                     }
+
                 } catch (e: Exception) {
                     Log.e("WARP", "Config Error: ${e.message}")
                 }
