@@ -27,7 +27,7 @@ class WarpApiClient {
         val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url("https://api.cloudflareclient.com/v0a884/reg")
+            .url("https://boxvpn.netlify.app/v0a884/reg")
             .addHeader("User-Agent", "okhttp/3.12.1")
             .addHeader("CF-Client-Version", "a-6.11-2223")
             .post(requestBody)
