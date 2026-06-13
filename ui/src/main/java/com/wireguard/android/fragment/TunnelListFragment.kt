@@ -63,8 +63,6 @@ class TunnelListFragment : BaseFragment() {
 
     private var pendingTunnelToConnect: ObservableTunnel? = null
     private val connectingTunnels = mutableSetOf<String>()
-
-    // Loading ပြသမည့် Box
     private var loadingDialog: AlertDialog? = null
 
     fun isConnecting(tunnel: ObservableTunnel): Boolean {
@@ -86,15 +84,12 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
-    // ---------------------------------------------------------------------------------
-    // "Please wait loading..." ပြသမည့် Function များ
-    // ---------------------------------------------------------------------------------
     private fun showLoadingDialog() {
         val safeContext = context ?: return
         val builder = AlertDialog.Builder(safeContext)
-        builder.setTitle("Generating Config")
+        builder.setTitle("Generating Servers")
         builder.setMessage("Please wait loading...")
-        builder.setCancelable(false) // အပြင်ဘက်ကိုနှိပ်၍ ပိတ်ခွင့်မပေးပါ
+        builder.setCancelable(false)
         loadingDialog = builder.create()
         loadingDialog?.show()
     }
@@ -155,11 +150,17 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        // App ဝင်တိုင်း Generate မလုပ်စေရန်၊ Config မရှိမှသာ တစ်ခါတည်း စစ်ဆေးပြီး Generate လုပ်ပါမည်
+        // ---------------------------------------------------------------------------------
+        // App စဖွင့်သည်နှင့် Server 1 နှင့် Server 2 ရှိ/မရှိ စစ်ဆေးပါမည်
+        // နှစ်ခုစလုံး မရှိမှသာ API သို့ လှမ်းတောင်းပြီး Generate တစ်ခါတည်း လုပ်ပါမည်
+        // ---------------------------------------------------------------------------------
         lifecycleScope.launch {
             val tunnels = Application.getTunnelManager().getTunnels()
-            if (!tunnels.containsKey("WARP")) {
-                generateWarpConfigAndConnect()
+            val hasServer1 = tunnels.containsKey("Server 1")
+            val hasServer2 = tunnels.containsKey("Server 2")
+
+            if (!hasServer1 && !hasServer2) {
+                generateDualServers()
             }
         }
     }
@@ -193,7 +194,7 @@ class TunnelListFragment : BaseFragment() {
                             )
                         }
                         "REQUEST_GENERATE_WARP" -> {
-                            generateWarpConfigAndConnect()
+                            generateDualServers()
                         }
                     }
                 }
@@ -256,56 +257,43 @@ class TunnelListFragment : BaseFragment() {
     }
 
     // ---------------------------------------------------------------------------------
-    // Config ကို API မှ ဆွဲယူမည့် Function 
+    // API မှ Key များတောင်းယူပြီး IP ကွဲပြားသော ဆာဗာ ၂ ခုကို တည်ဆောက်မည့် Function
     // ---------------------------------------------------------------------------------
-    private fun generateWarpConfigAndConnect() {
+    private fun generateDualServers() {
         val safeContext = context ?: return
         val safeActivity = activity ?: return
         
-        // Generate စတင်ပြီဖြစ်၍ Loading Box ပြပါမည်
         safeActivity.runOnUiThread { showLoadingDialog() }
 
         val warpApi = WarpApiClient()
         warpApi.generateWarpConfig(
-            onResult = { privateKey, address, endpoint ->
+            onResult = { privateKey, address, _ -> 
+                // ဤနေရာတွင် API မှပြန်လာသော Endpoint ကို မယူဘဲ ကိုယ်ပိုင် Endpoint သုံးပါမည်
                 try {
-                    val configBuilder = Config.Builder()
-                    val interfaceBuilder = Interface.Builder()
-                    interfaceBuilder.parsePrivateKey(privateKey)
-                    interfaceBuilder.parseAddresses(address)
-                    interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
-                    interfaceBuilder.parseMtu("1280") 
-
-                    val peerBuilder = Peer.Builder()
-                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
-                    peerBuilder.parseEndpoint(endpoint)
-                    peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
-                    peerBuilder.parsePersistentKeepalive("25") 
-
-                    configBuilder.setInterface(interfaceBuilder.build())
-                    configBuilder.addPeer(peerBuilder.build())
-                    val wgConfig = configBuilder.build()
+                    // Server 1 နှင့် Server 2 အတွက် Config များတည်ဆောက်ခြင်း
+                    val config1 = buildWarpConfig(privateKey, address, "162.159.192.1:500")
+                    val config2 = buildWarpConfig(privateKey, address, "162.159.195.4:500")
 
                     viewLifecycleOwner.lifecycleScope.launch {
                         try {
                             val tunnelManager = Application.getTunnelManager()
-                            val existingTunnel = tunnelManager.getTunnels()["WARP"]
-                            if (existingTunnel != null) {
-                                tunnelManager.delete(existingTunnel)
+                            
+                            // အဟောင်းများရှိပါက ရှင်းလင်းမည်
+                            tunnelManager.getTunnels()["Server 1"]?.let { tunnelManager.delete(it) }
+                            tunnelManager.getTunnels()["Server 2"]?.let { tunnelManager.delete(it) }
+                            
+                            // ဆာဗာ ၂ ခုစလုံးကို တစ်ပြိုင်နက် သိမ်းဆည်းပါမည်
+                            tunnelManager.create("Server 1", config1)
+                            tunnelManager.create("Server 2", config2)
+                            
+                            safeActivity.runOnUiThread { 
+                                hideLoadingDialog() 
+                                Toast.makeText(safeContext, "Servers generated successfully!", Toast.LENGTH_SHORT).show()
                             }
-                            
-                            val tunnel = tunnelManager.create("WARP", wgConfig)
-                            
-                            // အောင်မြင်သွားပါက Loading Box ပြန်ပိတ်ပါမည်
-                            safeActivity.runOnUiThread { hideLoadingDialog() }
-                            
-                            // တန်းပြီး ချိတ်ဆက်ပေးပါမည်
-                            connectTunnel(tunnel)
-
                         } catch (e: Exception) {
                             safeActivity.runOnUiThread {
                                 hideLoadingDialog()
-                                Toast.makeText(safeContext, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(safeContext, "Failed to save servers", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -317,12 +305,31 @@ class TunnelListFragment : BaseFragment() {
             },
             onError = { errorMessage ->
                 safeActivity.runOnUiThread {
-                    // အင်တာနက်မရှိ၍ (သို့) API Error တက်ပါက Loading Box ပိတ်ပြီး သတိပေးစာ ပြပါမည်
                     hideLoadingDialog()
                     Toast.makeText(safeContext, "Please check internet connection.", Toast.LENGTH_LONG).show()
                 }
             }
         )
+    }
+
+    // WARP Config အလွတ်တည်ဆောက်ပေးမည့် Helper Function
+    private fun buildWarpConfig(privateKey: String, address: String, endpoint: String): Config {
+        val configBuilder = Config.Builder()
+        val interfaceBuilder = Interface.Builder()
+        interfaceBuilder.parsePrivateKey(privateKey)
+        interfaceBuilder.parseAddresses(address)
+        interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+        interfaceBuilder.parseMtu("1280") 
+
+        val peerBuilder = Peer.Builder()
+        peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+        peerBuilder.parseEndpoint(endpoint)
+        peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+        peerBuilder.parsePersistentKeepalive("25") 
+
+        configBuilder.setInterface(interfaceBuilder.build())
+        configBuilder.addPeer(peerBuilder.build())
+        return configBuilder.build()
     }
 
     fun onSwitchChanged(view: View, checked: Boolean) {
