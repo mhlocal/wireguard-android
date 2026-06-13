@@ -44,21 +44,20 @@ class WarpApiClient {
                 if (response.isSuccessful) {
                     try {
                         val jsonResponse = JSONObject(responseData)
-                        val config = jsonResponse.getJSONObject("result").getJSONObject("config")
+                        
+                        // "result" ထဲမှာ မဟုတ်ဘဲ အပေါ်ယံက "config" ကို တိုက်ရိုက်ဆွဲထုတ်ပါမည်
+                        val config = jsonResponse.getJSONObject("config")
                         val interfaceInfo = config.getJSONObject("interface")
                         val address = interfaceInfo.getJSONObject("addresses").getString("v4") + "/32"
                         
-                        val endpoint = "engage.cloudflareclient.com:2408" 
+                        val endpoint = "engage.cloudflareclient.com:500" 
 
                         onResult(privateKeyBase64, address, endpoint)
                     } catch (e: Exception) {
-                        // JSON Error တက်ပါက Cloudflare ပြန်ပို့သော စာသားအစစ်ကို ဖန်သားပြင်တွင် ပြပါမည်
-                        // စာသားအရမ်းရှည်ပါက အစပိုင်းကိုသာ ဖြတ်ယူပါမည်
                         val shortResponse = if (responseData.length > 200) responseData.substring(0, 200) + "..." else responseData
-                        onError("Reply: $shortResponse")
+                        onError("Parse Error: ${e.message} | Data: $shortResponse")
                     }
                 } else {
-                    // HTTP 403 စသည်ဖြင့် Error တက်ပါကလည်း စာသားအစစ်ကို ပြပါမည်
                     val shortResponse = if (responseData.length > 200) responseData.substring(0, 200) + "..." else responseData
                     onError("HTTP ${response.code}: $shortResponse")
                 }
