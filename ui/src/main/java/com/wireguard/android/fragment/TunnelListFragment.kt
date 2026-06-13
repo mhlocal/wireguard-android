@@ -1,6 +1,12 @@
-// Switch ခလုတ်ကို ကိုယ်တိုင် အဖွင့်အပိတ် လုပ်သည့်အခါ အလုပ်လုပ်မည့် စနစ်
-    fun onSwitchToggled(checked: Boolean, tunnel: ObservableTunnel) {
+// ---------------------------------------------------------------------------------
+    // မျက်နှာပြင်ပေါ်ရှိ ခလုတ် (Switch) ကို ဖွင့်/ပိတ် လုပ်သည့်အခါ အလုပ်လုပ်မည့် Function
+    // ---------------------------------------------------------------------------------
+    fun onSwitchChanged(view: View, checked: Boolean) {
         val safeContext = context ?: return
+        val safeActivity = activity ?: return
+        
+        // XML တွင် သတ်မှတ်ထားသော android:tag မှတစ်ဆင့် Tunnel ကို လှမ်းယူပါမည်
+        val tunnel = view.tag as? ObservableTunnel ?: return 
         val tunnelManager = Application.getTunnelManager()
         
         lifecycleScope.launch {
@@ -17,19 +23,19 @@
                             val ipAddr = InetAddress.getByName("1.1.1.1")
                             val isInternetWorking = ipAddr.isReachable(3000)
                             
-                            withContext(Dispatchers.Main) {
+                            safeActivity.runOnUiThread {
                                 if (isInternetWorking) {
                                     Toast.makeText(safeContext, "Connected Successfully!", Toast.LENGTH_SHORT).show()
                                 } else {
                                     // အင်တာနက် မရလျှင် VPN ကို အလိုအလျောက် ပြန်ပိတ်ချပါမည် (မီးခိုးရောင် ပြန်ဖြစ်သွားပါမည်)
                                     Toast.makeText(safeContext, "No Internet! Disconnecting...", Toast.LENGTH_LONG).show()
-                                    tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN)
+                                    lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
                                 }
                             }
                         } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
+                            safeActivity.runOnUiThread {
                                 Toast.makeText(safeContext, "Connection Failed! Disconnecting...", Toast.LENGTH_LONG).show()
-                                tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN)
+                                lifecycleScope.launch { tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN) }
                             }
                         }
                     }
@@ -40,7 +46,9 @@
                 // Switch ကို ပိတ်လိုက်လျှင် VPN ကို ပိတ်ပါမည်
                 try {
                     tunnelManager.setTunnelState(tunnel, Tunnel.State.DOWN)
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    Log.e("WireGuard/TunnelListFragment", "Failed to stop VPN", e)
+                }
             }
         }
     }
