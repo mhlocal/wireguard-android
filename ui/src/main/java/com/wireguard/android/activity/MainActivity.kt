@@ -85,11 +85,13 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
                     interfaceBuilder.parsePrivateKey(privateKey)
                     interfaceBuilder.parseAddresses(address)
                     interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+                    interfaceBuilder.parseMtu("1280")
 
                     val peerBuilder = Peer.Builder()
-                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=") 
                     peerBuilder.parseEndpoint(endpoint)
                     peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+                    peerBuilder.parsePersistentKeepalive("25")
 
                     configBuilder.setInterface(interfaceBuilder.build())
                     configBuilder.addPeer(peerBuilder.build())
