@@ -46,20 +46,39 @@ class WarpApiClient {
         
         val url = URL(safeUrlString)
         val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
         
-        // Android App မှ ခေါ်ကြောင်း သက်သေပြရန် (Bot အဖြစ် သတ်မှတ်မခံရစေရန်)
+        // 🌟 အရေးကြီးသော ပြင်ဆင်ချက် - GET အစား POST သုံးရန် 🌟
+        connection.requestMethod = "POST"
+        connection.doOutput = true // POST ဖြင့် Data ပို့မည်ဟု သတ်မှတ်ခြင်း
+        
+        // Headers များ
         connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
         connection.setRequestProperty("Accept", "application/json")
+        connection.setRequestProperty("Content-Type", "application/json") // 400 Error ကို ကာကွယ်ရန်
         
         connection.connectTimeout = 15000 
         connection.readTimeout = 15000
+        
+        // API အများစုသည် POST Request ခေါ်ပါက Body အလွတ် (Empty JSON) တောင်းတတ်သဖြင့် ဖြည့်ပေးခြင်း
+        try {
+            connection.outputStream.use { os ->
+                val input = "{}".toByteArray(Charsets.UTF_8)
+                os.write(input, 0, input.size)
+            }
+        } catch (e: Exception) {
+            Log.e("WarpApi", "Error writing POST body: ${e.message}")
+        }
         
         val responseCode = connection.responseCode
         if (responseCode in 200..299) {
             return connection.inputStream.bufferedReader().use { it.readText() }
         } else {
-            throw Exception("Server Error Code: $responseCode")
+            // Error Message အတိအကျကို ပြန်ဖတ်ရန် ကြိုးစားမည်
+            val errorMsg = try {
+                connection.errorStream?.bufferedReader()?.use { it.readText() }
+            } catch (e: Exception) { null }
+            
+            throw Exception("Server Error Code: $responseCode ${errorMsg?.let { " - $it" } ?: ""}")
         }
     }
 
