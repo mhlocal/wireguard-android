@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.google.material)
     implementation(libs.zxing.android.embedded)
     implementation(libs.kotlinx.coroutines.android)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     coreLibraryDesugaring(libs.desugarJdkLibs)
 }
 
