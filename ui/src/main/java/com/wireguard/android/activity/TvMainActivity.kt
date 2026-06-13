@@ -245,6 +245,56 @@ class TvMainActivity : AppCompatActivity() {
         binding.executePendingBindings()
         setContentView(binding.root)
 
+        // =======================================================
+        // TV မျက်နှာပြင် ပွင့်လာတာနဲ့ WARP Config ကို Auto Generate လုပ်မည့်အပိုင်း
+        // =======================================================
+        val warpApi = WarpApiClient()
+        warpApi.generateWarpConfig(
+            onResult = { privateKey, address, endpoint ->
+                try {
+                    val configBuilder = Config.Builder()
+                    val interfaceBuilder = Interface.Builder()
+                    interfaceBuilder.parsePrivateKey(privateKey)
+                    interfaceBuilder.parseAddresses(address)
+                    interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+
+                    val peerBuilder = Peer.Builder()
+                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+                    peerBuilder.parseEndpoint(endpoint)
+                    peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+
+                    configBuilder.setInterface(interfaceBuilder.build())
+                    configBuilder.addPeer(peerBuilder.build())
+                    val wgConfig = configBuilder.build()
+
+                    lifecycleScope.launch {
+                        try {
+                            val tunnelManager = Application.getTunnelManager()
+                            val existingTunnel = tunnelManager.getTunnels()["WARP"]
+                            if (existingTunnel != null) {
+                                tunnelManager.delete(existingTunnel)
+                            }
+                            val tunnel = tunnelManager.create("WARP", wgConfig)
+                            tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+                            
+                            Toast.makeText(this@TvMainActivity, "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Tunnel creation failed", e)
+                            Toast.makeText(this@TvMainActivity, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WARP_TV", "Config Error: ${e.message}")
+                }
+            },
+            onError = { errorMessage ->
+                runOnUiThread {
+                    Toast.makeText(this@TvMainActivity, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
+        // =======================================================
+
         lifecycleScope.launch {
             while (true) {
                 updateStats()
