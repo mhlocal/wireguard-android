@@ -1,20 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-  ~ Copyright © 2017-2025 WireGuard LLC. All Rights Reserved.
-  ~ SPDX-License-Identifier: Apache-2.0
-  -->
+<?xml version="1.0" encoding="utf-8"?>
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
 
     <data>
-
         <import type="android.view.View" />
-
         <import type="com.wireguard.android.model.ObservableTunnel" />
-
         <import type="com.wireguard.android.backend.Tunnel.State" />
-
-        <variable
+        <import type="android.graphics.Color" /> <variable
             name="isDeleting"
             type="androidx.databinding.ObservableBoolean" />
 
@@ -56,7 +49,18 @@
                 android:textAppearance="?attr/textAppearanceTitleLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                tools:text="@sample/interface_names.json/names/names/name" />
+                tools:text="WARP VPN" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/tunnel_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@{item.state == State.UP ? `Connected` : `Connect`}"
+                android:textColor="@{item.state == State.UP ? Color.parseColor(`#00C853`) : Color.parseColor(`#808080`)}"
+                android:textStyle="bold"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="Connected" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tunnel_transfer"
