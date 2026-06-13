@@ -361,14 +361,14 @@ class TunnelListFragment : BaseFragment() {
                 binding.root.setOnLongClickListener {
                     actionModeListener.toggleItemChecked(position)
                     true
-                }
+                }*/
                 if (actionMode != null)
                     (binding.root as MultiselectableRelativeLayout).setMultiSelected(actionModeListener.checkedItems.contains(position))
                 else
                     (binding.root as MultiselectableRelativeLayout).setSingleSelected(selectedTunnel == item)
             }
         }
-    }*/
+    }
 
     private fun showSnackbar(message: CharSequence) {
         val binding = binding
