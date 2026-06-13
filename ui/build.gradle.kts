@@ -15,20 +15,6 @@ android {
         viewBinding = true
     }
 
-   // Kotlin စနစ်အတွက် မှန်ကန်သော ရေးသားပုံ
-    flavorDimensions += "device"
-
-    productFlavors {
-        create("mobile") {
-            dimension = "device"
-            // ဖုန်းအတွက် သီးသန့်ဖြစ်သည်
-        }
-        create("tv") {
-            dimension = "device"
-            applicationIdSuffix = ".tv"
-        }
-    }
-
 
     namespace = pkg
     defaultConfig {
