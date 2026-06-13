@@ -55,14 +55,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import android.util.Log
-import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 import com.wireguard.config.Config
 import com.wireguard.config.Interface
-import com.wireguard.config.Peer
-import com.wireguard.android.backend.Tunnel
+import com.wireguard.config.peer
 import com.wireguard.android.WarpApiClient
 
 class TvMainActivity : AppCompatActivity() {
