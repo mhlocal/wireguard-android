@@ -19,6 +19,11 @@ import com.wireguard.android.R
 import com.wireguard.android.fragment.TunnelDetailFragment
 import com.wireguard.android.fragment.TunnelEditorFragment
 import com.wireguard.android.model.ObservableTunnel
+import android.widget.Toast
+import com.wireguard.config.Config
+import com.wireguard.config.Interface
+import com.wireguard.config.Peer
+import com.wireguard.android.backend.Tunnel
 
 /**
  * CRUD interface for WireGuard tunnels. This activity serves as the main entry point to the
@@ -63,13 +68,65 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
         supportFragmentManager.addOnBackStackChangedListener(this)
         backPressedCallback = onBackPressedDispatcher.addCallback(this) { handleBackPressed() }
         onBackStackChanged()
-    }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.main_activity, menu)
-        return true
-    }
+        // မျက်နှာပြင် ပွင့်လာတာနဲ့ WARP Config ကို Auto Generate လုပ်ပါမယ်
+        val warpApi = WarpApiClient()
+        warpApi.generateWarpConfig(
+            onResult = { privateKey, address, endpoint ->
+                Log.d("WARP", "Success! PrivateKey: $privateKey, IP: $address, Endpoint: $endpoint")
 
+                try {
+                    // ၁။ WireGuard Config အသစ်ကို Code ဖြင့် တည်ဆောက်ခြင်း
+                    val configBuilder = Config.Builder()
+
+                    val interfaceBuilder = Interface.Builder()
+                    interfaceBuilder.parsePrivateKey(privateKey)
+                    interfaceBuilder.parseAddresses(address)
+                    interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+
+                    val peerBuilder = Peer.Builder()
+                    // Cloudflare WARP ၏ ပုံသေ Public Key ကို အသုံးပြုပါမည်
+                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+                    peerBuilder.parseEndpoint(endpoint)
+                    peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+
+                    configBuilder.setInterface(interfaceBuilder.build())
+                    configBuilder.addPeer(peerBuilder.build())
+                    val wgConfig = configBuilder.build()
+
+                    // ၂။ Main Thread (UI Thread) ပေါ်ပြောင်း၍ VPN ချိတ်ဆက်ခြင်း
+                    runOnUiThread {
+                        val tunnelManager = com.wireguard.android.Application.getTunnelManager()
+
+                        // "WARP" အမည်ဖြင့် ရှိပြီးသား Tunnel ရှိလျှင် အရင်ဖျက်ပါမည်
+                        val existingTunnel = tunnelManager.getTunnels()["WARP"]
+                        if (existingTunnel != null) {
+                            tunnelManager.delete(existingTunnel)
+                        }
+
+                        // Tunnel အသစ်ဖန်တီး၍ တိုက်ရိုက် ချိတ်ဆက်ပါမည် (State.UP)
+                        tunnelManager.create("WARP", wgConfig).whenComplete { tunnel, exception ->
+                            if (exception == null && tunnel != null) {
+                                tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+                                Toast.makeText(this@MainActivity, "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Log.e("WARP", "Tunnel creation failed", exception)
+                                Toast.makeText(this@MainActivity, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WARP", "Config Error: ${e.message}")
+                }
+            },
+            onError = { errorMessage ->
+                Log.e("WARP", "Error generating config: $errorMessage")
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
+    }
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             android.R.id.home -> {
