@@ -289,11 +289,15 @@ class TunnelListFragment : BaseFragment() {
                     }
                 }
             },
+            // ယခင် Code: Toast.makeText(safeContext, "Please check internet connection.", Toast.LENGTH_LONG).show()
+            // အောက်ပါ Code ဖြင့် အစားထိုးပါ-
             onError = { errorMessage ->
                 safeActivity.runOnUiThread {
                     hideLoadingDialog()
-                    Toast.makeText(safeContext, "Please check internet connection.", Toast.LENGTH_LONG).show()
+                    // Error အတိအကျကို UI တွင် ပြပေးပါမည်
+                    Toast.makeText(safeContext, errorMessage, Toast.LENGTH_LONG).show() 
                 }
+            }
             }
         )
     }
