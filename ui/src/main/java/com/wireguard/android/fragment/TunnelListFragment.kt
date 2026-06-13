@@ -98,75 +98,75 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
-    override fun onCreateView(
+     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         binding = TunnelListFragmentBinding.inflate(inflater, container, false)
-        val bottomSheet = AddTunnelsSheet()
+        
         binding?.apply {
+            // "+" ခလုတ်ကို နှိပ်လျှင် အောက်ပါအလုပ်များ လုပ်မည်
             createFab.setOnClickListener {
-                binding.createFab.setOnClickListener {
-            // ခလုတ်နှိပ်လိုက်ကြောင်း သိသာစေရန် စာသားအရင်ပြပါမည်
-            Toast.makeText(requireContext(), "Generating WARP Config...", Toast.LENGTH_SHORT).show()
+                
+                // ခလုတ်နှိပ်လိုက်ကြောင်း သိသာစေရန် စာသားအရင်ပြပါမည်
+                Toast.makeText(requireContext(), "Generating WARP Config...", Toast.LENGTH_SHORT).show()
 
-            val warpApi = WarpApiClient()
-            warpApi.generateWarpConfig(
-                onResult = { privateKey, address, endpoint ->
-                    try {
-                        val configBuilder = Config.Builder()
-                        val interfaceBuilder = Interface.Builder()
-                        interfaceBuilder.parsePrivateKey(privateKey)
-                        interfaceBuilder.parseAddresses(address)
-                        interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
-                        interfaceBuilder.parseMtu("1280") 
+                val warpApi = WarpApiClient()
+                warpApi.generateWarpConfig(
+                    onResult = { privateKey, address, endpoint ->
+                        try {
+                            val configBuilder = Config.Builder()
+                            val interfaceBuilder = Interface.Builder()
+                            interfaceBuilder.parsePrivateKey(privateKey)
+                            interfaceBuilder.parseAddresses(address)
+                            interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+                            interfaceBuilder.parseMtu("1280") 
 
-                        val peerBuilder = Peer.Builder()
-                        peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
-                        peerBuilder.parseEndpoint(endpoint)
-                        peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
-                        peerBuilder.parsePersistentKeepalive("25") 
+                            val peerBuilder = Peer.Builder()
+                            peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+                            peerBuilder.parseEndpoint(endpoint)
+                            peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+                            peerBuilder.parsePersistentKeepalive("25") 
 
-                        configBuilder.setInterface(interfaceBuilder.build())
-                        configBuilder.addPeer(peerBuilder.build())
-                        val wgConfig = configBuilder.build()
+                            configBuilder.setInterface(interfaceBuilder.build())
+                            configBuilder.addPeer(peerBuilder.build())
+                            val wgConfig = configBuilder.build()
 
-                        // Fragment အတွက်ဖြစ်၍ viewLifecycleOwner ကို အသုံးပြုပါသည်
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            try {
-                                val tunnelManager = Application.getTunnelManager()
-                                val existingTunnel = tunnelManager.getTunnels()["WARP"]
-                                if (existingTunnel != null) {
-                                    tunnelManager.delete(existingTunnel)
+                            // Fragment အတွက်ဖြစ်၍ viewLifecycleOwner ကို အသုံးပြုပါသည်
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                try {
+                                    val tunnelManager = Application.getTunnelManager()
+                                    val existingTunnel = tunnelManager.getTunnels()["WARP"]
+                                    if (existingTunnel != null) {
+                                        tunnelManager.delete(existingTunnel)
+                                    }
+                                    val tunnel = tunnelManager.create("WARP", wgConfig)
+                                    tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+                                    
+                                    Toast.makeText(requireContext(), "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Log.e("WARP", "Tunnel creation failed", e)
+                                    Toast.makeText(requireContext(), "Failed to create VPN", Toast.LENGTH_SHORT).show()
                                 }
-                                val tunnel = tunnelManager.create("WARP", wgConfig)
-                                tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                                
-                                Toast.makeText(requireContext(), "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
-                                Log.e("WARP", "Tunnel creation failed", e)
-                                Toast.makeText(requireContext(), "Failed to create VPN", Toast.LENGTH_SHORT).show()
                             }
+                        } catch (e: Exception) {
+                            Log.e("WARP", "Config Error: ${e.message}")
                         }
-                    } catch (e: Exception) {
-                        Log.e("WARP", "Config Error: ${e.message}")
+                    },
+                    onError = { errorMessage ->
+                        // UI Thread ပေါ်တွင် Error Message ပြပါမည်
+                        requireActivity().runOnUiThread {
+                            Toast.makeText(requireContext(), "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                        }
                     }
-                },
-                onError = { errorMessage ->
-                    // UI Thread ပေါ်တွင် Error Message ပြပါမည်
-                    requireActivity().runOnUiThread {
-                        Toast.makeText(requireContext(), "API Error: $errorMessage", Toast.LENGTH_LONG).show()
-                    }
-                }
-            )
-        }
-                }
-                bottomSheet.showNow(childFragmentManager, "BOTTOM_SHEET")
+                )
             }
+            
             executePendingBindings()
             snackbarUpdateShower.attach(mainContainer, createFab)
         }
+        
         backPressedCallback = requireActivity().onBackPressedDispatcher.addCallback(this) { actionMode?.finish() }
         backPressedCallback?.isEnabled = false
 
