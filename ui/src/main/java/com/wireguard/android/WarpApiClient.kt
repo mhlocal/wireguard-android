@@ -1,5 +1,6 @@
 package com.wireguard.android
 
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,74 +12,85 @@ import java.net.URL
 
 class WarpApiClient {
 
-    fun generateWarpConfig(onResult: (String, String, String) -> Unit, onError: (String) -> Unit) {
-        
-        // ⚠️ သင့်ရဲ့ တကယ့် API Link (၂) ခုကို ဒီနေရာမှာ အစားထိုးထည့်ပါ ⚠️
-        val primaryApiUrl = "https://boxvpn.netlify.app/v0a884/reg" 
-        val backupApiUrl = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg"  
+    companion object {
+        private const val TAG = "WarpApiClient"
+        private const val PRIMARY_API_ENDPOINT = "https://boxvpn.netlify.app/v0a884/reg"
+        private const val FALLBACK_API_ENDPOINT = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg"
+        private const val CONNECTION_TIMEOUT_MS = 5000
+    }
 
+    fun fetchConfiguration(
+        onSuccess: (privateKey: String, address: String, endpoint: String) -> Unit,
+        onFailure: (errorMessage: String) -> Unit
+    ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // ၁။ ပထမ API ကို အရင် စမ်းခေါ်ပါမည်
-                Log.d("WarpApi", "Trying Primary API...")
-                val response = makeNetworkRequest(primaryApiUrl)
-                parseAndReturnResult(response, onResult)
+                Log.d(TAG, "Initiating configuration fetch from primary endpoint.")
+                val response = executeNetworkRequest(PRIMARY_API_ENDPOINT)
+                processConfigResponse(response, onSuccess)
 
-            } catch (e1: Exception) {
-                Log.e("WarpApi", "Primary API Failed: ${e1.message}. Trying Backup API...")
+            } catch (primaryException: Exception) {
+                Log.w(TAG, "Primary endpoint unavailable: ${primaryException.message}. Attempting fallback.")
                 
-                // ၂။ ပထမ API အလုပ်မလုပ်ပါက ဒုတိယ API ကို ဆက်ခေါ်ပါမည် (Fallback)
                 try {
-                    val fallbackResponse = makeNetworkRequest(backupApiUrl)
-                    parseAndReturnResult(fallbackResponse, onResult)
+                    val fallbackResponse = executeNetworkRequest(FALLBACK_API_ENDPOINT)
+                    processConfigResponse(fallbackResponse, onSuccess)
                     
-                } catch (e2: Exception) {
-                    // ၃။ API နှစ်ခုစလုံး အလုပ်မလုပ်တော့မှသာ Error အဖြစ် သတ်မှတ်ပါမည်
-                    Log.e("WarpApi", "Backup API also Failed: ${e2.message}")
+                } catch (fallbackException: Exception) {
+                    Log.e(TAG, "All configuration endpoints failed.", fallbackException)
                     withContext(Dispatchers.Main) {
-                        onError("Failed to connect to servers. Please check internet.")
+                        onFailure("Failed to connect to required services. Please check your network connection.")
                     }
                 }
             }
         }
     }
 
-    // Network (အင်တာနက်) သို့ လှမ်းချိတ်ဆက်သည့် လုပ်ငန်းစဉ်
-    private fun makeNetworkRequest(urlString: String): String {
-        val url = URL(urlString)
+    private fun executeNetworkRequest(endpointUrl: String): String {
+        val url = URL(endpointUrl)
         val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 5000 // ၅ စက္ကန့်အတွင်း မချိတ်နိုင်ပါက ဒုတိယ API သို့ ပြောင်းပါမည်
-        connection.readTimeout = 5000
+        
+        connection.apply {
+            requestMethod = "GET"
+            connectTimeout = CONNECTION_TIMEOUT_MS
+            readTimeout = CONNECTION_TIMEOUT_MS
+            
+            // Appending standard App headers to prevent bot-detection
+            val userAgent = "WireGuard/${Build.VERSION.RELEASE} (Android ${Build.VERSION.SDK_INT}; ${Build.MANUFACTURER} ${Build.MODEL})"
+            setRequestProperty("User-Agent", userAgent)
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Connection", "Keep-Alive")
+        }
         
         val responseCode = connection.responseCode
         if (responseCode == HttpURLConnection.HTTP_OK) {
             return connection.inputStream.bufferedReader().use { it.readText() }
         } else {
-            throw Exception("Server returned HTTP response code: $responseCode")
+            throw Exception("Server responded with HTTP code: $responseCode")
         }
     }
 
-    // API မှ ပြန်ရလာသော JSON ကို ဖြည်ပြီး Config ထုတ်ပေးသည့် လုပ်ငန်းစဉ်
-    private suspend fun parseAndReturnResult(responseString: String, onResult: (String, String, String) -> Unit) {
+    private suspend fun processConfigResponse(
+        responsePayload: String, 
+        onSuccess: (String, String, String) -> Unit
+    ) {
         try {
-            val jsonObject = JSONObject(responseString)
+            val jsonObject = JSONObject(responsePayload)
             
-            // ⚠️ သတိပြုရန် - သင့် API မှ ပြန်ပို့သော စာသား (Keys) များနှင့် အောက်ပါ "private_key", "address" များကို ကိုက်ညီအောင် ပြင်ပေးပါ ⚠️
             val privateKey = jsonObject.optString("private_key", "")
             val address = jsonObject.optString("address", "")
-            val endpoint = jsonObject.optString("endpoint", "162.159.192.1:2408") // မပါလာပါက မူလ WARP IP ကို သုံးပါမည်
+            val endpoint = jsonObject.optString("endpoint", "162.159.192.1:2408")
             
-            if (privateKey.isNotEmpty() && address.isNotEmpty()) {
+            if (privateKey.isNotBlank() && address.isNotBlank()) {
                 withContext(Dispatchers.Main) {
-                    onResult(privateKey, address, endpoint)
+                    onSuccess(privateKey, address, endpoint)
                 }
             } else {
-                throw Exception("Invalid config data received")
+                throw Exception("Malformed configuration payload received.")
             }
         } catch (e: Exception) {
-            Log.e("WarpApi", "JSON Parse Error: ${e.message}")
-            throw e // JSON ဖြည်ရာတွင် အမှားအယွင်းရှိပါက ဒုတိယ API သို့ ပြောင်းခေါ်စေရန် Error ပစ်တင်လိုက်ပါမည်
+            Log.e(TAG, "Payload parsing error", e)
+            throw e 
         }
     }
 }
