@@ -25,10 +25,10 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.google.zxing.qrcode.QRCodeReader
 import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import com.wireguard.android.Application
 import com.wireguard.android.R
-import com.wireguard.android.activity.TunnelCreatorActivity
+import com.wireguard.android.WarpApiClient
+import com.wireguard.android.backend.Tunnel
 import com.wireguard.android.databinding.ObservableKeyedRecyclerViewAdapter.RowConfigurationHandler
 import com.wireguard.android.databinding.TunnelListFragmentBinding
 import com.wireguard.android.databinding.TunnelListItemBinding
@@ -38,15 +38,17 @@ import com.wireguard.android.util.ErrorMessages
 import com.wireguard.android.util.QrCodeFromFileScanner
 import com.wireguard.android.util.TunnelImporter
 import com.wireguard.android.widget.MultiselectableRelativeLayout
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.launch
-import com.wireguard.android.WarpApiClient
 import com.wireguard.config.Config
 import com.wireguard.config.Interface
 import com.wireguard.config.Peer
-import com.wireguard.android.backend.Tunnel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.InetAddress
 
 /**
  * Fragment containing a list of known WireGuard tunnels. It allows creating and deleting tunnels.
@@ -56,6 +58,7 @@ class TunnelListFragment : BaseFragment() {
     private var actionMode: ActionMode? = null
     private var backPressedCallback: OnBackPressedCallback? = null
     private var binding: TunnelListFragmentBinding? = null
+    
     private val tunnelFileImportResultLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { data ->
         if (data == null) return@registerForActivityResult
         val activity = activity ?: return@registerForActivityResult
@@ -98,7 +101,7 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
-     override fun onCreateView(
+    override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
@@ -106,63 +109,10 @@ class TunnelListFragment : BaseFragment() {
         binding = TunnelListFragmentBinding.inflate(inflater, container, false)
         
         binding?.apply {
-            // "+" ခလုတ်ကို နှိပ်လျှင် အောက်ပါအလုပ်များ လုပ်မည်
             createFab.setOnClickListener {
-                
-                // ခလုတ်နှိပ်လိုက်ကြောင်း သိသာစေရန် စာသားအရင်ပြပါမည်
-                Toast.makeText(requireContext(), "Generating WARP Config...", Toast.LENGTH_SHORT).show()
-
-                val warpApi = WarpApiClient()
-                warpApi.generateWarpConfig(
-                    onResult = { privateKey, address, endpoint ->
-                        try {
-                            val configBuilder = Config.Builder()
-                            val interfaceBuilder = Interface.Builder()
-                            interfaceBuilder.parsePrivateKey(privateKey)
-                            interfaceBuilder.parseAddresses(address)
-                            interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
-                            interfaceBuilder.parseMtu("1280") 
-
-                            val peerBuilder = Peer.Builder()
-                            peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
-                            peerBuilder.parseEndpoint(endpoint)
-                            peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
-                            peerBuilder.parsePersistentKeepalive("25") 
-
-                            configBuilder.setInterface(interfaceBuilder.build())
-                            configBuilder.addPeer(peerBuilder.build())
-                            val wgConfig = configBuilder.build()
-
-                            // Fragment အတွက်ဖြစ်၍ viewLifecycleOwner ကို အသုံးပြုပါသည်
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                try {
-                                    val tunnelManager = Application.getTunnelManager()
-                                    val existingTunnel = tunnelManager.getTunnels()["WARP"]
-                                    if (existingTunnel != null) {
-                                        tunnelManager.delete(existingTunnel)
-                                    }
-                                    val tunnel = tunnelManager.create("WARP", wgConfig)
-                                    tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                                    
-                                    Toast.makeText(requireContext(), "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
-                                } catch (e: Exception) {
-                                    Log.e("WARP", "Tunnel creation failed", e)
-                                    Toast.makeText(requireContext(), "Failed to create VPN", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("WARP", "Config Error: ${e.message}")
-                        }
-                    },
-                    onError = { errorMessage ->
-                        // UI Thread ပေါ်တွင် Error Message ပြပါမည်
-                        requireActivity().runOnUiThread {
-                            Toast.makeText(requireContext(), "API Error: $errorMessage", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                )
+                // အောက်တွင် သီးသန့်ခွဲထုတ်ထားသော Function ကိုသာ လှမ်းခေါ်ပါမည်
+                generateWarpConfigAndConnect() 
             }
-            
             executePendingBindings()
             snackbarUpdateShower.attach(mainContainer, createFab)
         }
@@ -171,6 +121,85 @@ class TunnelListFragment : BaseFragment() {
         backPressedCallback?.isEnabled = false
 
         return binding?.root
+    }
+
+    // VPN ချိတ်ဆက်ခြင်းနှင့် အင်တာနက်စမ်းသပ်ခြင်း (Ping) လုပ်ငန်းစဉ်များအားလုံး ပါဝင်သော သီးသန့် Function
+    private fun generateWarpConfigAndConnect() {
+        val safeContext = context ?: return
+        val safeActivity = activity ?: return
+        
+        Toast.makeText(safeContext, "Generating WARP Config...", Toast.LENGTH_SHORT).show()
+
+        val warpApi = WarpApiClient()
+        warpApi.generateWarpConfig(
+            onResult = { privateKey, address, endpoint ->
+                try {
+                    val configBuilder = Config.Builder()
+                    val interfaceBuilder = Interface.Builder()
+                    interfaceBuilder.parsePrivateKey(privateKey)
+                    interfaceBuilder.parseAddresses(address)
+                    interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+                    interfaceBuilder.parseMtu("1280") 
+
+                    val peerBuilder = Peer.Builder()
+                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+                    peerBuilder.parseEndpoint(endpoint)
+                    peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+                    peerBuilder.parsePersistentKeepalive("25") 
+
+                    configBuilder.setInterface(interfaceBuilder.build())
+                    configBuilder.addPeer(peerBuilder.build())
+                    val wgConfig = configBuilder.build()
+
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        try {
+                            val tunnelManager = Application.getTunnelManager()
+                            val existingTunnel = tunnelManager.getTunnels()["WARP"]
+                            if (existingTunnel != null) {
+                                tunnelManager.delete(existingTunnel)
+                            }
+                            
+                            val tunnel = tunnelManager.create("WARP", wgConfig)
+                            tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
+                            
+                            // VPN ချိတ်လိုက်ပြီဖြစ်၍ Connecting အခြေအနေကို ပြပါမည်
+                            Toast.makeText(safeContext, "Connecting... Checking internet...", Toast.LENGTH_LONG).show()
+
+                            // နောက်ကွယ်မှ အင်တာနက် တကယ်ရ/မရ Ping စစ်မည့်အပိုင်း
+                            withContext(Dispatchers.IO) {
+                                delay(2500) // VPN လမ်းကြောင်းပွင့်ရန် ၂.၅ စက္ကန့် စောင့်ပါမည်
+                                try {
+                                    val ipAddr = InetAddress.getByName("1.1.1.1")
+                                    val isInternetWorking = ipAddr.isReachable(4000) 
+
+                                    safeActivity.runOnUiThread {
+                                        if (isInternetWorking) {
+                                            Toast.makeText(safeContext, "Connected Successfully! Internet is working.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(safeContext, "Connected, but no internet access!", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    safeActivity.runOnUiThread {
+                                        Toast.makeText(safeContext, "Failed to check internet connection.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("WARP", "Tunnel creation failed", e)
+                            Toast.makeText(safeContext, "Failed to create VPN", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WARP", "Config Error: ${e.message}")
+                }
+            },
+            onError = { errorMessage ->
+                safeActivity.runOnUiThread {
+                    Toast.makeText(safeContext, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
     }
 
     override fun onDestroyView() {
