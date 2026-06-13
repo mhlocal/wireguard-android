@@ -49,8 +49,8 @@
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="12dp"
                 android:tag="@{item}"
-                android:text='@{item.state == State.UP ? "Connected" : "Connect"}'
-                android:textColor='@{item.state == State.UP ? Color.parseColor("#00C853") : Color.parseColor("#808080")}'
+                android:text='@{fragment.isConnecting(item) ? "Connecting..." : (item.state == State.UP ? "Connected" : "Connect")}'
+                android:textColor='@{fragment.isConnecting(item) ? Color.parseColor("#FFA000") : (item.state == State.UP ? Color.parseColor("#00C853") : Color.parseColor("#808080"))}'
                 android:nextFocusLeft="@+id/tunnel_list_item"
                 app:checked="@{item.state == State.UP}"
                 app:onBeforeCheckedChanged="@{fragment::onSwitchChanged}"
