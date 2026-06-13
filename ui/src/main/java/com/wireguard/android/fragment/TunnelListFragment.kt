@@ -175,30 +175,16 @@ class TunnelListFragment : BaseFragment() {
 
         binding?.apply {
             createFab.setOnClickListener {
-                if (childFragmentManager.findFragmentByTag("BOTTOM_SHEET") != null)
-                    return@setOnClickListener
-                childFragmentManager.setFragmentResultListener(AddTunnelsSheet.REQUEST_KEY_NEW_TUNNEL, viewLifecycleOwner) { _, bundle ->
-                    when (bundle.getString(AddTunnelsSheet.REQUEST_METHOD)) {
-                        AddTunnelsSheet.REQUEST_CREATE -> {
-                            startActivity(Intent(requireActivity(), TunnelCreatorActivity::class.java))
-                        }
-                        AddTunnelsSheet.REQUEST_IMPORT -> {
-                            tunnelFileImportResultLauncher.launch("*/*")
-                        }
-                        AddTunnelsSheet.REQUEST_SCAN -> {
-                            qrImportResultLauncher.launch(
-                                ScanOptions()
-                                    .setOrientationLocked(false)
-                                    .setBeepEnabled(false)
-                                    .setPrompt(getString(R.string.qr_code_hint))
-                            )
-                        }
-                        "REQUEST_GENERATE_WARP" -> {
-                            generateDualServers()
-                        }
-                    }
-                }
-                bottomSheet.showNow(childFragmentManager, "BOTTOM_SHEET")
+                // အပေါင်းပုံစံ (+) ခလုတ်နှိပ်လျှင် Premium Dialog ပေါ်လာမည်
+                val builder = AlertDialog.Builder(requireContext())
+                builder.setTitle("Premium Plans")
+                builder.setMessage(
+                    "5 month - 5000 Ks\n" +
+                    "1 year - 10000 Ks\n\n" +
+                    "ဆက်သွယ်ရန် Telegram တွင် @mhwarpadmin လို့ရိုက်ရှာပြီး ဆက်သွယ်နိုင်ပါသည်။"
+                )
+                builder.setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                builder.show()
             }
             executePendingBindings()
             snackbarUpdateShower.attach(mainContainer, createFab)
