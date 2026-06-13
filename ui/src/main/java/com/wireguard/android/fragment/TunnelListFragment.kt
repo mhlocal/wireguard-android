@@ -150,10 +150,6 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        // ---------------------------------------------------------------------------------
-        // App စဖွင့်သည်နှင့် Server 1 နှင့် Server 2 ရှိ/မရှိ စစ်ဆေးပါမည်
-        // နှစ်ခုစလုံး မရှိမှသာ API သို့ လှမ်းတောင်းပြီး Generate တစ်ခါတည်း လုပ်ပါမည်
-        // ---------------------------------------------------------------------------------
         lifecycleScope.launch {
             val tunnels = Application.getTunnelManager().getTunnels()
             val hasServer1 = tunnels.containsKey("Server 1")
@@ -171,19 +167,52 @@ class TunnelListFragment : BaseFragment() {
     ): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         binding = TunnelListFragmentBinding.inflate(inflater, container, false)
-        val bottomSheet = AddTunnelsSheet()
 
         binding?.apply {
             createFab.setOnClickListener {
-                // အပေါင်းပုံစံ (+) ခလုတ်နှိပ်လျှင် Premium Dialog ပေါ်လာမည်
+                val options = arrayOf("Premium Plans", "Add New Tunnel")
                 val builder = AlertDialog.Builder(requireContext())
-                builder.setTitle("Premium Plans")
-                builder.setMessage(
-                    "5 month - 5000 Ks\n" +
-                    "1 year - 10000 Ks\n\n" +
-                    "ဆက်သွယ်ရန် Telegram တွင် @mhwarpadmin လို့ရိုက်ရှာပြီး ဆက်သွယ်နိုင်ပါသည်။"
-                )
-                builder.setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                builder.setTitle("Select Option")
+                builder.setItems(options) { _, which ->
+                    when (which) {
+                        0 -> { 
+                            val premiumDialog = AlertDialog.Builder(requireContext())
+                            premiumDialog.setTitle("Premium Plans")
+                            premiumDialog.setMessage(
+                                "5 month - 5000 Ks\n" +
+                                "1 year - 10000 Ks\n\n" +
+                                "ဆက်သွယ်ရန် Telegram တွင် @mhwarpadmin လို့ရိုက်ရှာပြီး ဆက်သွယ်နိုင်ပါသည်။"
+                            )
+                            premiumDialog.setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                            premiumDialog.show()
+                        }
+                        1 -> { 
+                            val bottomSheet = AddTunnelsSheet()
+                            childFragmentManager.setFragmentResultListener(AddTunnelsSheet.REQUEST_KEY_NEW_TUNNEL, viewLifecycleOwner) { _, bundle ->
+                                when (bundle.getString(AddTunnelsSheet.REQUEST_METHOD)) {
+                                    AddTunnelsSheet.REQUEST_CREATE -> {
+                                        startActivity(Intent(requireActivity(), TunnelCreatorActivity::class.java))
+                                    }
+                                    AddTunnelsSheet.REQUEST_IMPORT -> {
+                                        tunnelFileImportResultLauncher.launch("*/*")
+                                    }
+                                    AddTunnelsSheet.REQUEST_SCAN -> {
+                                        qrImportResultLauncher.launch(
+                                            ScanOptions()
+                                                .setOrientationLocked(false)
+                                                .setBeepEnabled(false)
+                                                .setPrompt(getString(R.string.qr_code_hint))
+                                        )
+                                    }
+                                    "REQUEST_GENERATE_WARP" -> {
+                                        generateDualServers()
+                                    }
+                                }
+                            }
+                            bottomSheet.showNow(childFragmentManager, "BOTTOM_SHEET")
+                        }
+                    }
+                }
                 builder.show()
             }
             executePendingBindings()
@@ -242,9 +271,6 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
-    // ---------------------------------------------------------------------------------
-    // API မှ Key များတောင်းယူပြီး IP ကွဲပြားသော ဆာဗာ ၂ ခုကို တည်ဆောက်မည့် Function
-    // ---------------------------------------------------------------------------------
     private fun generateDualServers() {
         val safeContext = context ?: return
         val safeActivity = activity ?: return
@@ -254,9 +280,7 @@ class TunnelListFragment : BaseFragment() {
         val warpApi = WarpApiClient()
         warpApi.generateWarpConfig(
             onResult = { privateKey, address, _ -> 
-                // ဤနေရာတွင် API မှပြန်လာသော Endpoint ကို မယူဘဲ ကိုယ်ပိုင် Endpoint သုံးပါမည်
                 try {
-                    // Server 1 နှင့် Server 2 အတွက် Config များတည်ဆောက်ခြင်း
                     val config1 = buildWarpConfig(privateKey, address, "162.159.192.1:500")
                     val config2 = buildWarpConfig(privateKey, address, "162.159.195.4:500")
 
@@ -264,11 +288,9 @@ class TunnelListFragment : BaseFragment() {
                         try {
                             val tunnelManager = Application.getTunnelManager()
                             
-                            // အဟောင်းများရှိပါက ရှင်းလင်းမည်
                             tunnelManager.getTunnels()["Server 1"]?.let { tunnelManager.delete(it) }
                             tunnelManager.getTunnels()["Server 2"]?.let { tunnelManager.delete(it) }
                             
-                            // ဆာဗာ ၂ ခုစလုံးကို တစ်ပြိုင်နက် သိမ်းဆည်းပါမည်
                             tunnelManager.create("Server 1", config1)
                             tunnelManager.create("Server 2", config2)
                             
@@ -284,21 +306,18 @@ class TunnelListFragment : BaseFragment() {
                         }
                     }
                 } catch (e: Exception) {
-                    safeActivity.runOnUiThread {
-                        hideLoadingDialog()
-                    }
+                    safeActivity.runOnUiThread { hideLoadingDialog() }
                 }
             },
             onError = { errorMessage ->
                 safeActivity.runOnUiThread {
                     hideLoadingDialog()
-                    Toast.makeText(safeContext, "Please check internet connection.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(safeContext, errorMessage, Toast.LENGTH_LONG).show()
                 }
             }
         )
     }
 
-    // WARP Config အလွတ်တည်ဆောက်ပေးမည့် Helper Function
     private fun buildWarpConfig(privateKey: String, address: String, endpoint: String): Config {
         val configBuilder = Config.Builder()
         val interfaceBuilder = Interface.Builder()
