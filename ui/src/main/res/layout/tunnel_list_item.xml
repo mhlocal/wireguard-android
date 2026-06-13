@@ -35,30 +35,35 @@
         android:paddingHorizontal="16dp"
         android:paddingVertical="12dp">
 
-        <TextView
-            android:id="@+id/tunnel_name"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_alignParentStart="true"
-            android:layout_alignParentTop="true"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="@{key}"
-            android:textAppearance="?attr/textAppearanceBodyLarge"
-            tools:text="@sample/interface_names.json/names/names/name" />
+            android:orientation="vertical">
 
-        <com.wireguard.android.widget.ToggleSwitch
-            android:id="@+id/tunnel_switch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_below="@+id/tunnel_name"
-            android:layout_alignParentStart="true"
-            android:layout_marginTop="8dp"
-            android:text="@{item.state == State.UP ? `Connected` : `Connect`}"
-            android:nextFocusLeft="@+id/tunnel_list_item"
-            app:checked="@{item.state == State.UP}"
-            app:onBeforeCheckedChanged="@{fragment::setTunnelState}"
-            tools:checked="@sample/interface_names.json/names/checked/checked" />
+            <TextView
+                android:id="@+id/tunnel_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@{key}"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:text="WARP VPN" />
+
+            <com.wireguard.android.widget.ToggleSwitch
+                android:id="@+id/tunnel_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@{item.state == State.UP ? `Connected` : `Connect`}"
+                android:nextFocusLeft="@+id/tunnel_list_item"
+                app:checked="@{item.state == State.UP}"
+                app:onBeforeCheckedChanged="@{fragment::setTunnelState}"
+                tools:checked="true" />
+
+        </LinearLayout>
 
     </com.wireguard.android.widget.MultiselectableRelativeLayout>
 </layout>
