@@ -351,7 +351,7 @@ class TunnelListFragment : BaseFragment() {
         binding!!.rowConfigurationHandler = object : RowConfigurationHandler<TunnelListItemBinding, ObservableTunnel> {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
-                binding.root.setOnClickListener {
+            /*    binding.root.setOnClickListener {
                     if (actionMode == null) {
                         selectedTunnel = item
                     } else {
@@ -368,7 +368,7 @@ class TunnelListFragment : BaseFragment() {
                     (binding.root as MultiselectableRelativeLayout).setSingleSelected(selectedTunnel == item)
             }
         }
-    }
+    }*/
 
     private fun showSnackbar(message: CharSequence) {
         val binding = binding
