@@ -12,11 +12,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-          fetch-depth: 0 # Code ရာဇဝင်တစ်ခုလုံးကို ဆွဲယူရန်
+          fetch-depth: 0 
 
       - name: Force Initialize Git Submodules
         run: |
-          # Submodules တွေကို အတင်းအကျပ် အသစ်ပြန်ဆွဲယူခြင်း
           git submodule sync
           git submodule update --init --recursive --force
 
@@ -34,12 +33,16 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      # ဒီနေရာမှာ ဖုန်းရော TV ပါ နှစ်မျိုးစလုံးကို ခွဲထုတ်ခိုင်းပါမည်
+      - name: Build Mobile and TV Debug APKs
+        run: |
+          ./gradlew assembleMobileDebug
+          ./gradlew assembleTvDebug
 
-      - name: Upload APK as Artifact
+      # ထွက်လာတဲ့ APK ၂ ခုစလုံးကို တင်ပေးပါမည်
+      - name: Upload APKs as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VPN-App-Debug
-          path: ui/build/outputs/apk/debug/*.apk
+          name: VPN-App-Debug-Builds
+          path: ui/build/outputs/apk/**/*.apk # TV ရော Mobile ရော ပါဝင်ရန် ** ကို သုံးထားပါသည်
           retention-days: 3
