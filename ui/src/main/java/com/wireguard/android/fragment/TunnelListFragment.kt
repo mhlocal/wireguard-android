@@ -60,9 +60,7 @@ class TunnelListFragment : BaseFragment() {
     private var pendingTunnelToConnect: ObservableTunnel? = null
     private val connectingTunnels = mutableSetOf<String>()
     
-    // Server Generate အတွက် Loading
     private var loadingDialog: AlertDialog? = null
-    // Premium Status စစ်ဆေးရန် သီးသန့် Loading
     private var statusCheckDialog: AlertDialog? = null
     
     private var userStatusText: String = "Checking Status..."
@@ -86,7 +84,6 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
-    // 🌟 Premium သက်တမ်းစစ်ဆေးသည့် Loading Dialog 🌟
     private fun showStatusCheckDialog() {
         if (statusCheckDialog?.isShowing == true) return
         val safeContext = context ?: return
@@ -146,7 +143,6 @@ class TunnelListFragment : BaseFragment() {
         lifecycleScope.launch {
             premiumManager.checkTrialStatus(
                 onLoading = {
-                    // ရက်မကျန်ပါက အင်တာနက်မဖြစ်မနေစစ်ရန် Loading ပေါ်လာမည်
                     lifecycleScope.launch { showStatusCheckDialog() }
                 },
                 onStatusResult = { daysLeft ->
@@ -156,10 +152,11 @@ class TunnelListFragment : BaseFragment() {
                         userStatusText = "Premium ($daysLeft Days left)"
                         (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
                         
-                        val prefs = requireContext().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
+                        // 🌟 (၁) ထပ်ခါထပ်ခါ Generate မလုပ်စေရန် Global Memory စစ်ဆေးခြင်း 🌟
+                        val prefs = Application.get().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                         val hasGenerated = prefs.getBoolean("has_generated_servers", false)
                         
-                        if (!hasGenerated) {
+                        if (!hasGenerated && !isGenerating) {
                             generateDualServers()
                         }
                     }
@@ -167,7 +164,6 @@ class TunnelListFragment : BaseFragment() {
                 onExpired = {
                     lifecycleScope.launch {
                         hideStatusCheckDialog()
-                        
                         userStatusText = "EXPIRED"
                         (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | EXPIRED"
                         showPremiumExpiredDialog()
@@ -297,6 +293,9 @@ class TunnelListFragment : BaseFragment() {
     }
 
     private fun generateDualServers() {
+        if (isGenerating) return
+        isGenerating = true
+        
         val safeContext = context ?: return
         val safeActivity = activity ?: return
         
@@ -322,14 +321,17 @@ class TunnelListFragment : BaseFragment() {
                                 tunnelManager.create("Server2", config2)
                             }
                             
-                            val prefs = safeContext.getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
+                            // အောင်မြင်ပါက မှတ်ဉာဏ်ထဲ၌ အသေမှတ်ထားပါမည်
+                            val prefs = Application.get().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                             prefs.edit().putBoolean("has_generated_servers", true).apply()
                             
+                            isGenerating = false
                             safeActivity.runOnUiThread { 
                                 hideLoadingDialog() 
                                 Toast.makeText(safeContext, "Servers generated successfully!", Toast.LENGTH_SHORT).show()
                             }
                         } catch (e: Exception) {
+                            isGenerating = false
                             safeActivity.runOnUiThread {
                                 hideLoadingDialog()
                                 Log.e(TAG, "Save Error: ${e.message}", e)
@@ -338,10 +340,12 @@ class TunnelListFragment : BaseFragment() {
                         }
                     }
                 } catch (e: Exception) {
+                    isGenerating = false
                     safeActivity.runOnUiThread { hideLoadingDialog() }
                 }
             },
             onError = { errorMessage ->
+                isGenerating = false
                 safeActivity.runOnUiThread {
                     hideLoadingDialog()
                     Toast.makeText(safeContext, errorMessage, Toast.LENGTH_LONG).show()
@@ -369,7 +373,10 @@ class TunnelListFragment : BaseFragment() {
         return configBuilder.build()
     }
 
+    // 🌟 (၂) Auto ချိတ်နေခြင်းကို ကာကွယ်ရန် view.isPressed အား အသုံးပြုခြင်း 🌟
     fun onSwitchChanged(view: View, checked: Boolean) {
+        if (!view.isPressed) return // User က လက်ဖြင့် တကယ်မနှိပ်ဘဲ System က Auto ပြောင်းပေးတာဆိုရင် လျစ်လျူရှုမည်
+        
         val tunnel = view.tag as? ObservableTunnel ?: return 
         if (checked) {
             connectTunnel(tunnel)
@@ -588,5 +595,8 @@ class TunnelListFragment : BaseFragment() {
     companion object {
         private const val CHECKED_ITEMS = "CHECKED_ITEMS"
         private const val TAG = "WireGuard/TunnelListFragment"
+        
+        // ထပ်ခါထပ်ခါ Generate လုပ်ခြင်းကို တားဆီးပေးမည့် ကာကွယ်ရေး Variable အသစ်
+        private var isGenerating = false
     }
 }
