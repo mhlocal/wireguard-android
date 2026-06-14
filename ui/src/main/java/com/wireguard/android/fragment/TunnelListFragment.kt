@@ -358,7 +358,7 @@ class TunnelListFragment : BaseFragment() {
                             safeActivity.runOnUiThread {
                                 hideLoadingDialog()
                                 Log.e(TAG, "Save Error: ${e.message}", e)
-                                Toast.makeText(safeContext, "Failed to save servers: ${e.message}", Toast.LENGTH_).show()
+                                Toast.makeText(safeContext, "Failed to save servers: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
