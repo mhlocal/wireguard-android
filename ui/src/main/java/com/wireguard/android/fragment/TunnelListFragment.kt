@@ -126,22 +126,27 @@ class TunnelListFragment : BaseFragment() {
             premiumManager.checkTrialStatus(
                 onStatusResult = { daysLeft, isPremium ->
                     
-                    // Dialog နှင့် Action Bar အတွက် စာသားပြင်ဆင်ခြင်း
-                    userStatusText = if (isPremium) "Premium ($daysLeft Days left)" else "Free Trial ($daysLeft Days left)"
-                    (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
-                    
-                    // သက်တမ်းကျန်သေးပါက Server များကို ပုံမှန်အတိုင်း ထုတ်ပေးပါမည်
-                    val tunnels = Application.getTunnelManager().getTunnels()
-                    val hasServer1 = tunnels.containsKey("Server1")
-                    val hasServer2 = tunnels.containsKey("Server2")
-                    if (!hasServer1 && !hasServer2) {
-                        generateDualServers()
+                    // 🌟 အရေးကြီးသော ပြင်ဆင်ချက် - Coroutine ဖြင့် ပြန်အုပ်ပေးခြင်း 🌟
+                    lifecycleScope.launch {
+                        // Dialog နှင့် Action Bar အတွက် စာသားပြင်ဆင်ခြင်း
+                        userStatusText = if (isPremium) "Premium ($daysLeft Days left)" else "Free Trial ($daysLeft Days left)"
+                        (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
+                        
+                        // သက်တမ်းကျန်သေးပါက Server များကို ပုံမှန်အတိုင်း ထုတ်ပေးပါမည်
+                        val tunnels = Application.getTunnelManager().getTunnels()
+                        val hasServer1 = tunnels.containsKey("Server1")
+                        val hasServer2 = tunnels.containsKey("Server2")
+                        if (!hasServer1 && !hasServer2) {
+                            generateDualServers()
+                        }
                     }
                 },
                 onExpired = {
-                    userStatusText = "EXPIRED"
-                    (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | EXPIRED"
-                    showPremiumExpiredDialog()
+                    lifecycleScope.launch {
+                        userStatusText = "EXPIRED"
+                        (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | EXPIRED"
+                        showPremiumExpiredDialog()
+                    }
                 }
             )
         }
