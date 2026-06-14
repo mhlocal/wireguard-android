@@ -461,6 +461,13 @@ class TunnelListFragment : BaseFragment() {
                 binding.root.isClickable = false
                 binding.root.isLongClickable = false
 
+                binding.tunnelName.isFocusable = false
+                binding.tunnelStatus.isFocusable = false
+                
+                // 🌟 Switch (သို့) နှိပ်စေချင်သော နေရာကိုသာ Focus ပေးရန် 🌟
+                binding.tunnelSwitch.isFocusable = true
+                binding.tunnelSwitch.isClickable = true
+
                /* binding.root.setOnClickListener {
                     if (actionMode == null) {
                         selectedTunnel = item
