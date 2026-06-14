@@ -26,13 +26,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.view.ActionMode
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
-import com.google.zxing.qrcode.QRCodeReader
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import com.wireguard.android.Application
+import com.wireguard.android.PremiumManager
 import com.wireguard.android.R
 import com.wireguard.android.WarpApiClient
-import com.wireguard.android.activity.TunnelCreatorActivity
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.android.databinding.ObservableKeyedRecyclerViewAdapter.RowConfigurationHandler
 import com.wireguard.android.databinding.TunnelListFragmentBinding
@@ -40,8 +37,6 @@ import com.wireguard.android.databinding.TunnelListItemBinding
 import com.wireguard.android.model.ObservableTunnel
 import com.wireguard.android.updater.SnackbarUpdateShower
 import com.wireguard.android.util.ErrorMessages
-import com.wireguard.android.util.QrCodeFromFileScanner
-import com.wireguard.android.util.TunnelImporter
 import com.wireguard.android.widget.MultiselectableRelativeLayout
 import com.wireguard.config.Config
 import com.wireguard.config.Interface
@@ -64,6 +59,9 @@ class TunnelListFragment : BaseFragment() {
     private var pendingTunnelToConnect: ObservableTunnel? = null
     private val connectingTunnels = mutableSetOf<String>()
     private var loadingDialog: AlertDialog? = null
+    
+    // 🌟 Dialog တွင် ရက်ကျန်ပြသရန် သိမ်းထားမည့် Variable 🌟
+    private var userStatusText: String = "Checking Status..."
 
     fun isConnecting(tunnel: ObservableTunnel): Boolean {
         return connectingTunnels.contains(tunnel.name)
@@ -109,36 +107,6 @@ class TunnelListFragment : BaseFragment() {
         pendingTunnelToConnect = null
     }
 
-    private val tunnelFileImportResultLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { data ->
-        if (data == null) return@registerForActivityResult
-        val activity = activity ?: return@registerForActivityResult
-        val contentResolver = activity.contentResolver ?: return@registerForActivityResult
-        activity.lifecycleScope.launch {
-            if (QrCodeFromFileScanner.validContentType(contentResolver, data)) {
-                try {
-                    val qrCodeFromFileScanner = QrCodeFromFileScanner(contentResolver, QRCodeReader())
-                    val result = qrCodeFromFileScanner.scan(data)
-                    TunnelImporter.importTunnel(parentFragmentManager, result.text) { showSnackbar(it) }
-                } catch (e: Exception) {
-                    val error = ErrorMessages[e]
-                    val message = Application.get().resources.getString(R.string.import_error, error)
-                    Log.e(TAG, message, e)
-                    showSnackbar(message)
-                }
-            } else {
-                TunnelImporter.importTunnel(contentResolver, data) { showSnackbar(it) }
-            }
-        }
-    }
-
-    private val qrImportResultLauncher = registerForActivityResult(ScanContract()) { result ->
-        val qrCode = result.contents
-        val activity = activity
-        if (qrCode != null && activity != null) {
-            activity.lifecycleScope.launch { TunnelImporter.importTunnel(parentFragmentManager, qrCode) { showSnackbar(it) } }
-        }
-    }
-
     private val snackbarUpdateShower = SnackbarUpdateShower(this)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -150,14 +118,32 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        lifecycleScope.launch {
-            val tunnels = Application.getTunnelManager().getTunnels()
-            val hasServer1 = tunnels.containsKey("Server1")
-            val hasServer2 = tunnels.containsKey("Server2")
+        // 🌟 Premium နှင့် Trial သက်တမ်း စစ်ဆေးသည့် အပိုင်း 🌟
+        val premiumManager = PremiumManager(requireContext())
+        val deviceId = android.provider.Settings.Secure.getString(requireContext().contentResolver, android.provider.Settings.Secure.ANDROID_ID)
 
-            if (!hasServer1 && !hasServer2) {
-                generateDualServers()
-            }
+        lifecycleScope.launch {
+            premiumManager.checkTrialStatus(
+                onStatusResult = { daysLeft, isPremium ->
+                    
+                    // Dialog နှင့် Action Bar အတွက် စာသားပြင်ဆင်ခြင်း
+                    userStatusText = if (isPremium) "Premium ($daysLeft Days left)" else "Free Trial ($daysLeft Days left)"
+                    (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
+                    
+                    // သက်တမ်းကျန်သေးပါက Server များကို ပုံမှန်အတိုင်း ထုတ်ပေးပါမည်
+                    val tunnels = Application.getTunnelManager().getTunnels()
+                    val hasServer1 = tunnels.containsKey("Server1")
+                    val hasServer2 = tunnels.containsKey("Server2")
+                    if (!hasServer1 && !hasServer2) {
+                        generateDualServers()
+                    }
+                },
+                onExpired = {
+                    userStatusText = "EXPIRED"
+                    (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | EXPIRED"
+                    showPremiumExpiredDialog()
+                }
+            )
         }
     }
 
@@ -170,50 +156,30 @@ class TunnelListFragment : BaseFragment() {
 
         binding?.apply {
             createFab.setOnClickListener {
-                val options = arrayOf("Premium Plans", "Add New Tunnel")
-                val builder = AlertDialog.Builder(requireContext())
-                builder.setTitle("Select Option")
-                builder.setItems(options) { _, which ->
-                    when (which) {
-                        0 -> { 
-                            val premiumDialog = AlertDialog.Builder(requireContext())
-                            premiumDialog.setTitle("Premium Plans")
-                            premiumDialog.setMessage(
-                                "5 month - 5000 Ks\n" +
-                                "1 year - 10000 Ks\n\n" +
-                                "ဆက်သွယ်ရန် Telegram တွင် @mhwarpadmin လို့ရိုက်ရှာပြီး ဆက်သွယ်နိုင်ပါသည်။"
-                            )
-                            premiumDialog.setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
-                            premiumDialog.show()
-                        }
-                        1 -> { 
-                            val bottomSheet = AddTunnelsSheet()
-                            childFragmentManager.setFragmentResultListener(AddTunnelsSheet.REQUEST_KEY_NEW_TUNNEL, viewLifecycleOwner) { _, bundle ->
-                                when (bundle.getString(AddTunnelsSheet.REQUEST_METHOD)) {
-                                    AddTunnelsSheet.REQUEST_CREATE -> {
-                                        startActivity(Intent(requireActivity(), TunnelCreatorActivity::class.java))
-                                    }
-                                    AddTunnelsSheet.REQUEST_IMPORT -> {
-                                        tunnelFileImportResultLauncher.launch("*/*")
-                                    }
-                                    AddTunnelsSheet.REQUEST_SCAN -> {
-                                        qrImportResultLauncher.launch(
-                                            ScanOptions()
-                                                .setOrientationLocked(false)
-                                                .setBeepEnabled(false)
-                                                .setPrompt(getString(R.string.qr_code_hint))
-                                        )
-                                    }
-                                    "REQUEST_GENERATE_WARP" -> {
-                                        generateDualServers()
-                                    }
-                                }
-                            }
-                            bottomSheet.showNow(childFragmentManager, "BOTTOM_SHEET")
-                        }
-                    }
+                // 🌟 အပေါင်း (+) နှိပ်လျှင် User ID, ရက်ကျန် နှင့် Contact သီးသန့်သာ ပေါ်မည် 🌟
+                val deviceId = android.provider.Settings.Secure.getString(requireContext().contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+
+                val premiumDialog = AlertDialog.Builder(requireContext())
+                premiumDialog.setTitle("👑 User Information")
+                premiumDialog.setMessage(
+                    "User ID:\n$deviceId\n\n" +
+                    "Status: $userStatusText\n\n" +
+                    "--- Premium Plans ---\n" +
+                    "5 month - 5000 Ks\n" +
+                    "1 year - 10000 Ks\n\n" +
+                    "ဆက်သွယ်ရန် Telegram: @mhwarpadmin"
+                )
+                
+                premiumDialog.setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                
+                premiumDialog.setNeutralButton("Copy ID") { _, _ ->
+                    val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Device ID", deviceId)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(requireContext(), "Device ID Copied!", Toast.LENGTH_SHORT).show()
                 }
-                builder.show()
+                
+                premiumDialog.show()
             }
             executePendingBindings()
             snackbarUpdateShower.attach(mainContainer, createFab)
@@ -222,6 +188,33 @@ class TunnelListFragment : BaseFragment() {
         backPressedCallback?.isEnabled = false
 
         return binding?.root
+    }
+
+    private fun showPremiumExpiredDialog() {
+        val builder = AlertDialog.Builder(requireContext())
+        builder.setTitle("Trial Expired")
+        val deviceId = android.provider.Settings.Secure.getString(requireContext().contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+        builder.setMessage(
+            "သင်၏ 7 ရက် Free Trial သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ဆက်လက်အသုံးပြုရန် Premium ဝယ်ယူပါ။\n\n" +
+            "User ID:\n$deviceId\n\n" +
+            "5 month - 5000 Ks\n" +
+            "1 year - 10000 Ks\n\n" +
+            "ဆက်သွယ်ရန် Telegram တွင် @mhwarpadmin လို့ရိုက်ရှာပြီး ဆက်သွယ်နိုင်ပါသည်။"
+        )
+        builder.setCancelable(false) 
+        
+        builder.setPositiveButton("Exit App") { _, _ ->
+            activity?.finish() 
+        }
+        
+        builder.setNeutralButton("Copy ID") { _, _ ->
+            val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Device ID", deviceId)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(requireContext(), "Device ID Copied!", Toast.LENGTH_SHORT).show()
+        }
+        
+        builder.show()
     }
 
     private fun connectTunnel(tunnel: ObservableTunnel) {
@@ -290,7 +283,6 @@ class TunnelListFragment : BaseFragment() {
                             
                             tunnelManager.getTunnels()["Server1"]?.let { tunnelManager.delete(it) }
                             tunnelManager.getTunnels()["Server2"]?.let { tunnelManager.delete(it) }
-                            tunnelManager.getTunnels()["WARP"]?.let { tunnelManager.delete(it) } 
                             
                             withContext(Dispatchers.IO) {
                                 tunnelManager.create("Server1", config1)
@@ -398,7 +390,6 @@ class TunnelListFragment : BaseFragment() {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
                 
-                // 🌟 ဒီနေရာမှာ ရိုးရိုး Click ကို ပြန်ထည့်ပေးလိုက်ပါပြီ 🌟
                 binding.root.setOnClickListener {
                     if (actionMode == null) {
                         selectedTunnel = item
