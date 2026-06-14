@@ -29,6 +29,21 @@ class PremiumManager(private val context: Context) {
         onStatusResult: (daysLeft: Int) -> Unit, 
         onExpired: () -> Unit
     ) {
+        val prefs = context.getSharedPreferences("PremiumPrefs", Context.MODE_PRIVATE)
+        val expireDateMs = prefs.getLong("expire_date_ms", 0L)
+        val currentTimeMs = System.currentTimeMillis()
+
+        // 🌟 အဆင့် (၁) - ဖုန်းမှတ်ဉာဏ် (SharedPreference) တွင် သက်တမ်းကျန်/မကျန် အရင်စစ်မည် 🌟
+        if (expireDateMs > currentTimeMs) {
+            val diffInMillis = expireDateMs - currentTimeMs
+            val daysLeft = TimeUnit.MILLISECONDS.toDays(diffInMillis).toInt()
+            if (daysLeft > 0) {
+                withContext(Dispatchers.Main) { onStatusResult(daysLeft) }
+                return // သက်တမ်းကျန်သေးသဖြင့် Supabase သို့ အင်တာနက်ဖြင့် လှမ်းမစစ်တော့ပါ
+            }
+        }
+
+        // 🌟 အဆင့် (၂) - သက်တမ်းကုန်နေပါက (သို့) ပထမဆုံးအကြိမ်ဖြစ်နေပါက Supabase တွင် စစ်မည် 🌟
         val deviceId = getDeviceId()
         
         withContext(Dispatchers.IO) {
@@ -44,35 +59,40 @@ class PremiumManager(private val context: Context) {
                 val responseData = response.body?.string() ?: ""
                 
                 if (!response.isSuccessful) {
-                    Log.e("PremiumManager", "Supabase GET Error: ${response.code}")
-                    withContext(Dispatchers.Main) { onStatusResult(1) }
+                    withContext(Dispatchers.Main) { onStatusResult(1) } // Error ဖြစ်လျှင် ယာယီခွင့်ပြုထားမည်
                     return@withContext
                 }
 
                 val jsonArray = JSONArray(responseData)
 
                 if (jsonArray.length() == 0) {
-                    // (၁) အသစ်ဆိုလျှင် ၇ ရက်စာ Expire Date ကို တွက်၍ Database သို့ တန်းသိမ်းမည်
-                    val isSaved = registerNewDevice(deviceId)
-                    if (isSaved) {
+                    // အသစ်ဖြစ်ပါက ၇ ရက်ပေး၍ ဖုန်းမှတ်ဉာဏ် + Database နှစ်ခုလုံးတွင် သိမ်းမည်
+                    val newExpireMs = registerNewDevice(deviceId)
+                    if (newExpireMs > 0L) {
+                        prefs.edit().putLong("expire_date_ms", newExpireMs).apply()
                         withContext(Dispatchers.Main) { onStatusResult(7) }
                     } else {
                         withContext(Dispatchers.Main) { onStatusResult(1) }
                     }
                 } else {
                     val deviceData = jsonArray.getJSONObject(0)
-                    
-                    // (၂) Database ရှိ Expire Date ကို စစ်ဆေးမည်
                     val premiumExpireStr = deviceData.optString("premium_expire_date", "null")
                     
                     if (premiumExpireStr != "null" && premiumExpireStr.isNotEmpty()) {
-                        val daysLeft = getPremiumDaysLeft(premiumExpireStr)
-                        if (daysLeft > 0) {
+                        val serverExpireMs = parseDateToMillis(premiumExpireStr)
+                        
+                        if (serverExpireMs > currentTimeMs) {
+                            // Supabase တွင် Admin မှ Premium ထပ်တိုးပေးထားပါက ဖုန်းမှတ်ဉာဏ်ကိုပါ အသစ်ပြန်ပြင်မည်
+                            prefs.edit().putLong("expire_date_ms", serverExpireMs).apply()
+                            val daysLeft = TimeUnit.MILLISECONDS.toDays(serverExpireMs - currentTimeMs).toInt()
                             withContext(Dispatchers.Main) { onStatusResult(daysLeft) }
                         } else {
+                            // အမှန်တကယ် သက်တမ်းကုန်သွားပါက မှတ်ဉာဏ်ကို 0 ပြန်ထားမည်
+                            prefs.edit().putLong("expire_date_ms", 0L).apply()
                             withContext(Dispatchers.Main) { onExpired() }
                         }
                     } else {
+                        prefs.edit().putLong("expire_date_ms", 0L).apply()
                         withContext(Dispatchers.Main) { onExpired() }
                     }
                 }
@@ -83,16 +103,14 @@ class PremiumManager(private val context: Context) {
         }
     }
 
-    private fun registerNewDevice(deviceId: String): Boolean {
+    private fun registerNewDevice(deviceId: String): Long {
         return try {
-            // ယခုအချိန်မှစ၍ နောက် ၇ ရက်ကို တွက်ချက်ခြင်း
             val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
             calendar.add(Calendar.DAY_OF_YEAR, 7)
             val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
             format.timeZone = TimeZone.getTimeZone("UTC")
             val expireDateStr = format.format(calendar.time)
 
-            // Database သို့ ID နှင့်တကွ Expire Date အတိအကျကိုပါ ထည့်သွင်းခြင်း
             val json = JSONObject().apply { 
                 put("device_id", deviceId) 
                 put("premium_expire_date", expireDateStr)
@@ -109,18 +127,16 @@ class PremiumManager(private val context: Context) {
                 .build()
                 
             val response = client.newCall(request).execute()
-            response.isSuccessful
+            if (response.isSuccessful) calendar.timeInMillis else 0L
         } catch (e: Exception) {
-            false
+            0L
         }
     }
 
-    private fun getPremiumDaysLeft(expireDateStr: String): Int {
+    private fun parseDateToMillis(dateStr: String): Long {
         val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         return try {
-            val expireDate = format.parse(expireDateStr) ?: Date()
-            val diffInMillis = expireDate.time - Date().time
-            TimeUnit.MILLISECONDS.toDays(diffInMillis).toInt()
-        } catch (e: Exception) { 0 }
+            format.parse(dateStr)?.time ?: 0L
+        } catch (e: Exception) { 0L }
     }
 }
