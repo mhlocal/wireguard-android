@@ -34,11 +34,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 🌟 (၁) Debug အစား Release APK ကို ပြောင်း၍ Build လုပ်ခြင်း 🌟
+# (၁) Release APK ကို Build လုပ်ခြင်း
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
-      # 🌟 (၂) GitHub Secrets ထဲမှ Keystore ဖြင့် App ကို Sign လုပ်ခြင်း 🌟
+      # 🌟 (၁.၅) Sign Action အတွက် လိုအပ်သော Build Tools 29.0.3 ကို စက်ထဲသို့ အရင်သွင်းပေးခြင်း 🌟
+      - name: Install Build Tools 29.0.3
+        run: echo "y" | sdkmanager "build-tools;29.0.3"
+
+      # (၂) Keystore ဖြင့် APK ကို Sign လုပ်ခြင်း
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
         id: sign_app
@@ -48,9 +52,8 @@ jobs:
           alias: ${{ secrets.SIGNING_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: 34.0.0
 
-      # 🌟 (၃) Sign လုပ်ပြီးသား Official APK ကို Download ရယူနိုင်ရန် တင်ပေးခြင်း 🌟
+      # (၃) Sign လုပ်ပြီးသား Official APK ကို Download ရယူနိုင်ရန် တင်ပေးခြင်း
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
