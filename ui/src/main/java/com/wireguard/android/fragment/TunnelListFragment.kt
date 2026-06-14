@@ -457,6 +457,10 @@ class TunnelListFragment : BaseFragment() {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
                 
+                // 🌟 Click နှင့် Long Click ကို လုံးဝ (Ripple Effect ပါမကျန်) အပြီးတိုင် ပိတ်ချခြင်း 🌟
+                binding.root.isClickable = false
+                binding.root.isLongClickable = false
+
                /* binding.root.setOnClickListener {
                     if (actionMode == null) {
                         selectedTunnel = item
@@ -476,7 +480,6 @@ class TunnelListFragment : BaseFragment() {
                     (binding.root as MultiselectableRelativeLayout).setSingleSelected(selectedTunnel == item)
             }
         }
-    }
 
     private fun showSnackbar(message: CharSequence) {
         val binding = binding
