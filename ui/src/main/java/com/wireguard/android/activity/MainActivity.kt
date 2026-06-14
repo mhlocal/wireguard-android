@@ -63,19 +63,7 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
         backPressedCallback = onBackPressedDispatcher.addCallback(this) { handleBackPressed() }
         onBackStackChanged()
 
-        try {
-            val info = packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES)
-            val signatures = info.signatures
-            if (signatures != null && signatures.isNotEmpty()) {
-                val hash = signatures[0].hashCode()
-                
-                // ဖုန်းမျက်နှာပြင်တွင် တိုက်ရိုက်ပြပေးမည် (GitHub မှ Build သူများအတွက် ပိုလွယ်ကူစေရန်)
-                android.widget.Toast.makeText(this, "App Hash: $hash", android.widget.Toast.LENGTH_LONG).show()
-                android.util.Log.e("MY_APP_HASH", "My Signature Hash: $hash")
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        
         
         // 🌟 အလိုအလျောက် WARP ထုတ်ပေးသော Code အပိုင်းကြီးအားလုံးကို ဖျက်ပစ်လိုက်ပါပြီ 🌟
     }
