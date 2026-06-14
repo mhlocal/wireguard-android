@@ -62,6 +62,12 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
         supportFragmentManager.addOnBackStackChangedListener(this)
         backPressedCallback = onBackPressedDispatcher.addCallback(this) { handleBackPressed() }
         onBackStackChanged()
+
+        try {
+    val info = packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES)
+    val hash = info.signatures[0].hashCode()
+    android.util.Log.e("MY_APP_HASH", "My Signature Hash: $hash")
+} catch (e: Exception) {}
         
         // 🌟 အလိုအလျောက် WARP ထုတ်ပေးသော Code အပိုင်းကြီးအားလုံးကို ဖျက်ပစ်လိုက်ပါပြီ 🌟
     }
