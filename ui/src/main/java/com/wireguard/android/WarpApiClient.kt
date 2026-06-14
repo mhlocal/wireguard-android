@@ -1,5 +1,6 @@
 package com.wireguard.android
 
+import android.content.Context
 import android.util.Log
 import com.wireguard.crypto.KeyPair
 import okhttp3.*
@@ -16,13 +17,13 @@ class WarpApiClient {
         System.loadLibrary("api-keys")
     }
 
-    // 🌟 C++ ထဲမှ Function များကို လှမ်းခေါ်ရန် ကြေညာခြင်း 🌟
-    private external fun getProxyUrl1(): String
-    private external fun getProxyUrl2(): String
+    // 🌟 ပြင်ဆင်ချက် - C++ တွင် App Signature စစ်ရန် Context (Parameter) ထည့်ပေးရပါမည် 🌟
+    private external fun getProxyUrl1(context: Context): String
+    private external fun getProxyUrl2(context: Context): String
 
-    // 🌟 C++ မှ ဖျောက်ထားသော URL များကို ရယူခြင်း 🌟
-    private val proxyUrl1 = getProxyUrl1()
-    private val proxyUrl2 = getProxyUrl2()
+    // 🌟 Application ၏ Context ကိုရယူ၍ C++ သို့ ထည့်ပေးလိုက်ခြင်း 🌟
+    private val proxyUrl1 = getProxyUrl1(Application.get())
+    private val proxyUrl2 = getProxyUrl2(Application.get())
 
     fun generateWarpConfig(onResult: (privateKey: String, address: String, endpoint: String) -> Unit, onError: (String) -> Unit) {
         val keyPair = KeyPair()
