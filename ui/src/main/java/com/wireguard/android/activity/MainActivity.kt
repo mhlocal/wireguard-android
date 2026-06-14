@@ -6,7 +6,6 @@ package com.wireguard.android.activity
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.activity.OnBackPressedCallback
@@ -19,15 +18,6 @@ import com.wireguard.android.R
 import com.wireguard.android.fragment.TunnelDetailFragment
 import com.wireguard.android.fragment.TunnelEditorFragment
 import com.wireguard.android.model.ObservableTunnel
-import android.widget.Toast
-import com.wireguard.config.Config
-import com.wireguard.config.Interface
-import com.wireguard.config.Peer
-import com.wireguard.android.backend.Tunnel
-import android.util.Log
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import com.wireguard.android.WarpApiClient
 
 /**
  * CRUD interface for WireGuard tunnels. This activity serves as the main entry point to the
@@ -72,65 +62,10 @@ class MainActivity : BaseActivity(), FragmentManager.OnBackStackChangedListener 
         supportFragmentManager.addOnBackStackChangedListener(this)
         backPressedCallback = onBackPressedDispatcher.addCallback(this) { handleBackPressed() }
         onBackStackChanged()
-
-        // မျက်နှာပြင် ပွင့်လာတာနဲ့ WARP Config ကို Auto Generate လုပ်ပါမယ်
-        val warpApi = WarpApiClient()
-        warpApi.generateWarpConfig(
-            onResult = { privateKey, address, endpoint ->
-                Log.d("WARP", "Success! PrivateKey: $privateKey, IP: $address, Endpoint: $endpoint")
-
-                try {
-                    val configBuilder = Config.Builder()
-                    val interfaceBuilder = Interface.Builder()
-                    interfaceBuilder.parsePrivateKey(privateKey)
-                    interfaceBuilder.parseAddresses(address)
-                    interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
-                    interfaceBuilder.parseMtu("1280")
-
-                    val peerBuilder = Peer.Builder()
-                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=") 
-                    peerBuilder.parseEndpoint(endpoint)
-                    peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
-                    peerBuilder.parsePersistentKeepalive("25")
-
-                    configBuilder.setInterface(interfaceBuilder.build())
-                    configBuilder.addPeer(peerBuilder.build())
-                    val wgConfig = configBuilder.build()
-
-                    // Suspend Function များကို အသုံးပြုရန် Coroutine ဖြင့် Background တွင် အလုပ်လုပ်ခိုင်းခြင်း
-                    lifecycleScope.launch {
-                        try {
-                            val tunnelManager = com.wireguard.android.Application.getTunnelManager()
-
-                            // "WARP" အမည်ဖြင့် ရှိပြီးသား Tunnel ရှိလျှင် အရင်ဖျက်ပါမည်
-                            val existingTunnel = tunnelManager.getTunnels()["WARP"]
-                            if (existingTunnel != null) {
-                                tunnelManager.delete(existingTunnel)
-                            }
-
-                            // Tunnel အသစ်ဖန်တီး၍ တိုက်ရိုက် ချိတ်ဆက်ပါမည်
-                            val tunnel = tunnelManager.create("WARP", wgConfig)
-                            tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                            
-                            Toast.makeText(this@MainActivity, "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            Log.e("WARP", "Tunnel creation failed", e)
-                            Toast.makeText(this@MainActivity, "Failed to create VPN", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-
-                } catch (e: Exception) {
-                    Log.e("WARP", "Config Error: ${e.message}")
-                }
-            },
-            onError = { errorMessage ->
-                Log.e("WARP", "Error generating config: $errorMessage")
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
-                }
-            }
-        )
+        
+        // 🌟 အလိုအလျောက် WARP ထုတ်ပေးသော Code အပိုင်းကြီးအားလုံးကို ဖျက်ပစ်လိုက်ပါပြီ 🌟
     }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             android.R.id.home -> {
