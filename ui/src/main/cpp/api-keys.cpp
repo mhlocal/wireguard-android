@@ -4,35 +4,29 @@
 // ==========================================
 // 🌟 ၁။ Supabase (PremiumManager) အတွက် 🌟
 // ==========================================
-
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_wireguard_android_PremiumManager_getSupabaseUrl(JNIEnv* env, jobject /* this */) {
-    std::string url = "https://xxxxxxxxxxxx.supabase.co/rest/v1/devices";
+    std::string url = "https://xxxxxxxxxxxx.supabase.co/rest/v1/devices"; // သင့် Supabase URL အမှန်ကို ပြောင်းပါ
     return env->NewStringUTF(url.c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_wireguard_android_PremiumManager_getSupabaseKey(JNIEnv* env, jobject /* this */) {
-    std::string key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxxxxxxx...";
+    std::string key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxxxxxxx..."; // သင့် Supabase Key အမှန်ကို ပြောင်းပါ
     return env->NewStringUTF(key.c_str());
 }
 
 // ==========================================
 // 🌟 ၂။ Warp (WarpApiClient) အတွက် 🌟
 // ==========================================
-
-// Warp ၏ Base URL ကို ဖျောက်ရန်
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_wireguard_android_WarpApiClient_getWarpBaseUrl(JNIEnv* env, jobject /* this */) {
-    // သင့် WarpApiClient ထဲက တကယ့် URL ကို ဤနေရာတွင် ထည့်ပါ
-    std::string url = "https://api.cloudflareclient.com/v0a884/reg"; 
+Java_com_wireguard_android_WarpApiClient_getProxyUrl1(JNIEnv* env, jobject /* this */) {
+    std::string url = "https://api.cloudflareclient.com//v0a884/reg";
     return env->NewStringUTF(url.c_str());
 }
 
-// Warp အတွက် လိုအပ်သော တခြား Key များရှိလျှင် (ဥပမာ - Authorization token)
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_wireguard_android_WarpApiClient_getWarpAuthKey(JNIEnv* env, jobject /* this */) {
-    // သင့် WarpApiClient တွင် သုံးသော တကယ့် Key ကို ထည့်ပါ
-    std::string key = "YOUR_WARP_SECRET_KEY_OR_TOKEN"; 
-    return env->NewStringUTF(key.c_str());
+Java_com_wireguard_android_WarpApiClient_getProxyUrl2(JNIEnv* env, jobject /* this */) {
+    std::string url = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg";
+    return env->NewStringUTF(url.c_str());
 }
