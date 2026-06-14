@@ -16,17 +16,26 @@ import java.util.concurrent.TimeUnit
 
 class PremiumManager(private val context: Context) {
     private val client = OkHttpClient()
-    
-    // ⚠️ သင့် Supabase URL နှင့် API Key ကို မှန်ကန်စွာ ထည့်ပါ ⚠️
-    private val supabaseUrl = "https://hmjmyoqkvqwjhqdnlamf.supabase.co/rest/v1/devices"
-    private val supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtam15b3FrdnF3amhxZG5sYW1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTY3NjMsImV4cCI6MjA5Njk5Mjc2M30.CXgn9jMN1tq9QczoMxmgpL9DzrfF5ah4ncFN1fSBsCU"
+
+    // 🌟 (၁) C++ Library ကို App ပွင့်သည်နှင့် ချိတ်ဆက်ခြင်း 🌟
+    init {
+        System.loadLibrary("api-keys")
+    }
+
+    // 🌟 (၂) C++ ထဲမှ Function များကို Kotlin သို့ လှမ်းခေါ်ခြင်း (App Signature စစ်ရန် context ထည့်ပေးရမည်) 🌟
+    private external fun getSupabaseUrl(context: Context): String
+    private external fun getSupabaseKey(context: Context): String
+
+    // 🌟 (၃) C++ မှ ရရှိသော လုံခြုံသည့် URL နှင့် Key ကို အသုံးပြုခြင်း 🌟
+    private val supabaseUrl = getSupabaseUrl(context)
+    private val supabaseKey = getSupabaseKey(context)
 
     private fun getDeviceId(): String {
         return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     }
 
     suspend fun checkTrialStatus(
-        onLoading: () -> Unit, // 🌟 Loading ပြရန် အသစ်ထည့်ထားသည် 🌟
+        onLoading: () -> Unit,
         onStatusResult: (daysLeft: Int) -> Unit, 
         onExpired: () -> Unit
     ) {
@@ -34,17 +43,14 @@ class PremiumManager(private val context: Context) {
         val localExpireMs = prefs.getLong("expire_date_ms", 0L)
         val currentTimeMs = System.currentTimeMillis()
 
-        // 🌟 အဆင့် (၁) - ဖုန်းထဲတွင် ရက်ကျန်/မကျန် စစ်မည် 🌟
         if (localExpireMs > currentTimeMs) {
             val diffInMillis = localExpireMs - currentTimeMs
             val daysLeft = TimeUnit.MILLISECONDS.toDays(diffInMillis).toInt()
             withContext(Dispatchers.Main) { onStatusResult(daysLeft) }
         } else {
-            // ရက်မကျန်ပါက (သို့မဟုတ် ပထမဆုံးအကြိမ်ဖြစ်ပါက) Loading အရင်ပြခိုင်းမည်
             withContext(Dispatchers.Main) { onLoading() }
         }
 
-        // 🌟 အဆင့် (၂) - Supabase တွင် အင်တာနက်ဖြင့် မဖြစ်မနေ စစ်မည် 🌟
         val deviceId = getDeviceId()
         
         withContext(Dispatchers.IO) {
@@ -61,7 +67,7 @@ class PremiumManager(private val context: Context) {
                 
                 if (!response.isSuccessful) {
                     if (localExpireMs <= currentTimeMs) {
-                        withContext(Dispatchers.Main) { onExpired() } // အင်တာနက်မရှိ/Error တက်၍ ရက်လည်းမကျန်ပါက ပိတ်ချမည်
+                        withContext(Dispatchers.Main) { onExpired() }
                     }
                     return@withContext
                 }
@@ -69,7 +75,6 @@ class PremiumManager(private val context: Context) {
                 val jsonArray = JSONArray(responseData)
 
                 if (jsonArray.length() == 0) {
-                    // အသစ်ဖြစ်ပါက ၇ ရက်ပေးမည်
                     val newExpireMs = registerNewDevice(deviceId)
                     if (newExpireMs > 0L) {
                         prefs.edit().putLong("expire_date_ms", newExpireMs).apply()
@@ -77,7 +82,7 @@ class PremiumManager(private val context: Context) {
                         withContext(Dispatchers.Main) { onStatusResult(newDaysLeft) }
                     } else {
                         if (localExpireMs <= currentTimeMs) {
-                            withContext(Dispatchers.Main) { onExpired() } // သိမ်း၍မရပါက ပိတ်ချမည်
+                            withContext(Dispatchers.Main) { onExpired() }
                         }
                     }
                 } else {
@@ -88,14 +93,12 @@ class PremiumManager(private val context: Context) {
                         val serverExpireMs = parseDateToMillis(premiumExpireStr)
                         
                         if (serverExpireMs > currentTimeMs) {
-                            // Database တွင် Admin ပြင်ထား၍ ရက်ရှိနေပါက Update ပြန်လုပ်ပေးမည်
                             if (serverExpireMs != localExpireMs) {
                                 prefs.edit().putLong("expire_date_ms", serverExpireMs).apply()
                                 val updatedDaysLeft = TimeUnit.MILLISECONDS.toDays(serverExpireMs - currentTimeMs).toInt()
                                 withContext(Dispatchers.Main) { onStatusResult(updatedDaysLeft) }
                             }
                         } else {
-                            // တကယ် သက်တမ်းကုန်နေပါက ဖုန်းမှတ်ဉာဏ်ကို ဖျက်မည်
                             prefs.edit().putLong("expire_date_ms", 0L).apply()
                             withContext(Dispatchers.Main) { onExpired() }
                         }
@@ -105,10 +108,8 @@ class PremiumManager(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                // အင်တာနက်လုံးဝမရှိပါက ဤနေရာသို့ ရောက်လာမည်
                 Log.e("PremiumManager", "App Error: ${e.message}")
                 if (localExpireMs <= currentTimeMs) {
-                    // အင်တာနက်လည်းမရှိ၊ ဖုန်းထဲမှာလည်း ရက်မကျန်ပါက အတင်းပိတ်ချမည်
                     withContext(Dispatchers.Main) { onExpired() }
                 }
             }
