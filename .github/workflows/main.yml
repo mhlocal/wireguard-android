@@ -34,12 +34,25 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      # 🌟 (၁) Debug အစား Release APK ကို ပြောင်း၍ Build လုပ်ခြင်း 🌟
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
 
-      - name: Upload APK as Artifact
+      # 🌟 (၂) GitHub Secrets ထဲမှ Keystore ဖြင့် App ကို Sign လုပ်ခြင်း 🌟
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: ui/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.SIGNING_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      # 🌟 (၃) Sign လုပ်ပြီးသား Official APK ကို Download ရယူနိုင်ရန် တင်ပေးခြင်း 🌟
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: VPN-App-Debug
-          path: ui/build/outputs/apk/debug/*.apk
+          name: MH-VPN-Signed-Release
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}
           retention-days: 3
