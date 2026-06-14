@@ -6,6 +6,7 @@ package com.wireguard.android.fragment
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.net.VpnService
@@ -60,7 +61,6 @@ class TunnelListFragment : BaseFragment() {
     private val connectingTunnels = mutableSetOf<String>()
     private var loadingDialog: AlertDialog? = null
     
-    // 🌟 Dialog တွင် ရက်ကျန်ပြသရန် သိမ်းထားမည့် Variable 🌟
     private var userStatusText: String = "Checking Status..."
 
     fun isConnecting(tunnel: ObservableTunnel): Boolean {
@@ -118,25 +118,21 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        // 🌟 Premium နှင့် Trial သက်တမ်း စစ်ဆေးသည့် အပိုင်း 🌟
         val premiumManager = PremiumManager(requireContext())
         val deviceId = android.provider.Settings.Secure.getString(requireContext().contentResolver, android.provider.Settings.Secure.ANDROID_ID)
 
         lifecycleScope.launch {
             premiumManager.checkTrialStatus(
-                onStatusResult = { daysLeft, isPremium ->
-                    
-                    // 🌟 အရေးကြီးသော ပြင်ဆင်ချက် - Coroutine ဖြင့် ပြန်အုပ်ပေးခြင်း 🌟
+                onStatusResult = { daysLeft ->
                     lifecycleScope.launch {
-                        // Dialog နှင့် Action Bar အတွက် စာသားပြင်ဆင်ခြင်း
-                        userStatusText = if (isPremium) "Premium ($daysLeft Days left)" else "Free Trial ($daysLeft Days left)"
+                        userStatusText = "Premium ($daysLeft Days left)"
                         (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
                         
-                        // သက်တမ်းကျန်သေးပါက Server များကို ပုံမှန်အတိုင်း ထုတ်ပေးပါမည်
-                        val tunnels = Application.getTunnelManager().getTunnels()
-                        val hasServer1 = tunnels.containsKey("Server1")
-                        val hasServer2 = tunnels.containsKey("Server2")
-                        if (!hasServer1 && !hasServer2) {
+                        // 🌟 SharedPreference ကိုသုံးပြီး တစ်ခါပဲ Generate လုပ်ရန် စစ်ဆေးခြင်း 🌟
+                        val prefs = requireContext().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
+                        val hasGenerated = prefs.getBoolean("has_generated_servers", false)
+                        
+                        if (!hasGenerated) {
                             generateDualServers()
                         }
                     }
@@ -161,7 +157,6 @@ class TunnelListFragment : BaseFragment() {
 
         binding?.apply {
             createFab.setOnClickListener {
-                // 🌟 အပေါင်း (+) နှိပ်လျှင် User ID, ရက်ကျန် နှင့် Contact သီးသန့်သာ ပေါ်မည် 🌟
                 val deviceId = android.provider.Settings.Secure.getString(requireContext().contentResolver, android.provider.Settings.Secure.ANDROID_ID)
 
                 val premiumDialog = AlertDialog.Builder(requireContext())
@@ -178,7 +173,7 @@ class TunnelListFragment : BaseFragment() {
                 premiumDialog.setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
                 
                 premiumDialog.setNeutralButton("Copy ID") { _, _ ->
-                    val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     val clip = android.content.ClipData.newPlainText("Device ID", deviceId)
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(requireContext(), "Device ID Copied!", Toast.LENGTH_SHORT).show()
@@ -213,7 +208,7 @@ class TunnelListFragment : BaseFragment() {
         }
         
         builder.setNeutralButton("Copy ID") { _, _ ->
-            val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             val clip = android.content.ClipData.newPlainText("Device ID", deviceId)
             clipboard.setPrimaryClip(clip)
             Toast.makeText(requireContext(), "Device ID Copied!", Toast.LENGTH_SHORT).show()
@@ -285,14 +280,20 @@ class TunnelListFragment : BaseFragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         try {
                             val tunnelManager = Application.getTunnelManager()
+                            val tunnels = tunnelManager.getTunnels()
                             
-                            tunnelManager.getTunnels()["Server1"]?.let { tunnelManager.delete(it) }
-                            tunnelManager.getTunnels()["Server2"]?.let { tunnelManager.delete(it) }
+                            // အဟောင်းများကို စစ်ဆေးဖျက်ပစ်မည်
+                            tunnels.firstOrNull { it.name == "Server1" }?.let { tunnelManager.delete(it) }
+                            tunnels.firstOrNull { it.name == "Server2" }?.let { tunnelManager.delete(it) }
                             
                             withContext(Dispatchers.IO) {
                                 tunnelManager.create("Server1", config1)
                                 tunnelManager.create("Server2", config2)
                             }
+                            
+                            // 🌟 အောင်မြင်သွားပါက နောက်တစ်ခါ ထပ်မထုတ်ရန် မှတ်သားပါမည် 🌟
+                            val prefs = safeContext.getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
+                            prefs.edit().putBoolean("has_generated_servers", true).apply()
                             
                             safeActivity.runOnUiThread { 
                                 hideLoadingDialog() 
