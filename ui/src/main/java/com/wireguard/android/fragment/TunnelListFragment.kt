@@ -137,7 +137,7 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        // 🌟 အရေးကြီးသော ပြင်ဆင်ချက် - App ဖွင့်ဖွင့်ချင်းတွင် ပွင့်နေသော VPN များရှိပါက အတင်းလိုက်ပိတ်မည် 🌟
+        // 🌟 WARP အဟောင်းများရှိနေပါက အမြစ်ပြတ်ဖျက်ပစ်မည့် စနစ် 🌟
         lifecycleScope.launch {
             try {
                 val tunnels = Application.getTunnelManager().getTunnels()
@@ -146,8 +146,6 @@ class TunnelListFragment : BaseFragment() {
                         Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.DOWN)
                     }
                 }
-                
-                // "WARP" ဆိုသည့် Tunnel အဟောင်း ကျန်နေသေးပါက အပြီးတိုင် ဖျက်ပစ်မည်
                 withContext(Dispatchers.IO) {
                     tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }?.let { Application.getTunnelManager().delete(it) }
                 }
@@ -311,6 +309,7 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
+    // 🌟 ဤနေရာတွင် Server1 နှင့် Server2 ကိုသာ သီးသန့်ဖန်တီးပါမည် 🌟
     private fun generateDualServers() {
         if (isGenerating) return
         isGenerating = true
@@ -332,14 +331,16 @@ class TunnelListFragment : BaseFragment() {
                             val tunnelManager = Application.getTunnelManager()
                             val tunnels = tunnelManager.getTunnels()
                             
+                            // အဟောင်းများရှိပါက ရှင်းလင်းမည် (WARP အပါအဝင်)
                             tunnels.firstOrNull { it.name == "Server1" }?.let { tunnelManager.delete(it) }
                             tunnels.firstOrNull { it.name == "Server2" }?.let { tunnelManager.delete(it) }
+                            tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }?.let { tunnelManager.delete(it) }
                             
                             withContext(Dispatchers.IO) {
+                                // Server1 နှင့် Server2 ကိုသာ အသစ်ဖန်တီးသည်
                                 val t1 = tunnelManager.create("Server1", config1)
                                 val t2 = tunnelManager.create("Server2", config2)
                                 
-                                // 🌟 Server အသစ် ထုတ်ပြီးသည်နှင့် အလိုလို ပွင့်မလာစေရန် အတင်းပိတ်ချမည် 🌟
                                 tunnelManager.setTunnelState(t1, Tunnel.State.DOWN)
                                 tunnelManager.setTunnelState(t2, Tunnel.State.DOWN)
                             }
@@ -395,11 +396,9 @@ class TunnelListFragment : BaseFragment() {
         return configBuilder.build()
     }
 
-    // 🌟 Double Protection: User က လက်ဖြင့် အမှန်တကယ် နှိပ်မှသာ အလုပ်လုပ်စေမည် 🌟
     fun onSwitchChanged(view: View, checked: Boolean) {
-        if (!view.isPressed) return // System က အလိုလို ပြောင်းပေးတာကို လုံးဝ လက်မခံပါ
-        
         val tunnel = view.tag as? ObservableTunnel ?: return 
+        
         val isCurrentlyUp = tunnel.state == Tunnel.State.UP
         if (checked == isCurrentlyUp) return
         
