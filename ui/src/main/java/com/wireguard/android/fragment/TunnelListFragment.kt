@@ -152,7 +152,6 @@ class TunnelListFragment : BaseFragment() {
                         userStatusText = "Premium ($daysLeft Days left)"
                         (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
                         
-                        // 🌟 (၁) ထပ်ခါထပ်ခါ Generate မလုပ်စေရန် Global Memory စစ်ဆေးခြင်း 🌟
                         val prefs = Application.get().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                         val hasGenerated = prefs.getBoolean("has_generated_servers", false)
                         
@@ -321,7 +320,6 @@ class TunnelListFragment : BaseFragment() {
                                 tunnelManager.create("Server2", config2)
                             }
                             
-                            // အောင်မြင်ပါက မှတ်ဉာဏ်ထဲ၌ အသေမှတ်ထားပါမည်
                             val prefs = Application.get().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                             prefs.edit().putBoolean("has_generated_servers", true).apply()
                             
@@ -373,11 +371,15 @@ class TunnelListFragment : BaseFragment() {
         return configBuilder.build()
     }
 
-    // 🌟 (၂) Auto ချိတ်နေခြင်းကို ကာကွယ်ရန် view.isPressed အား အသုံးပြုခြင်း 🌟
+    // 🌟 ဤနေရာတွင် Auto ချိတ်ခြင်းကို ကာကွယ်ရန် လော့ဂျစ်အသစ် ပြောင်းထားပါသည် 🌟
     fun onSwitchChanged(view: View, checked: Boolean) {
-        if (!view.isPressed) return // User က လက်ဖြင့် တကယ်မနှိပ်ဘဲ System က Auto ပြောင်းပေးတာဆိုရင် လျစ်လျူရှုမည်
-        
         val tunnel = view.tag as? ObservableTunnel ?: return 
+        
+        // လက်ရှိ VPN ၏ အခြေအနေ (ပွင့်/ပိတ်) နှင့် Switch မှ တောင်းဆိုသည့် အခြေအနေ တူညီနေပါက
+        // System က Auto ပြောင်းလဲပေးခြင်းသာဖြစ်၍ ဘာမှမလုပ်ဘဲ လျစ်လျူရှုပါမည်။
+        val isCurrentlyUp = tunnel.state == Tunnel.State.UP
+        if (checked == isCurrentlyUp) return
+        
         if (checked) {
             connectTunnel(tunnel)
         } else {
@@ -596,7 +598,7 @@ class TunnelListFragment : BaseFragment() {
         private const val CHECKED_ITEMS = "CHECKED_ITEMS"
         private const val TAG = "WireGuard/TunnelListFragment"
         
-        // ထပ်ခါထပ်ခါ Generate လုပ်ခြင်းကို တားဆီးပေးမည့် ကာကွယ်ရေး Variable အသစ်
+        // ထပ်ခါထပ်ခါ Generate လုပ်ခြင်းကို တားဆီးပေးမည့် ကာကွယ်ရေး Variable
         private var isGenerating = false
     }
 }
