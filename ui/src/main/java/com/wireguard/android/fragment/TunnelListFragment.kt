@@ -59,7 +59,11 @@ class TunnelListFragment : BaseFragment() {
 
     private var pendingTunnelToConnect: ObservableTunnel? = null
     private val connectingTunnels = mutableSetOf<String>()
+    
+    // Server Generate အတွက် Loading
     private var loadingDialog: AlertDialog? = null
+    // Premium Status စစ်ဆေးရန် သီးသန့် Loading
+    private var statusCheckDialog: AlertDialog? = null
     
     private var userStatusText: String = "Checking Status..."
 
@@ -82,7 +86,25 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
+    // 🌟 Premium သက်တမ်းစစ်ဆေးသည့် Loading Dialog 🌟
+    private fun showStatusCheckDialog() {
+        if (statusCheckDialog?.isShowing == true) return
+        val safeContext = context ?: return
+        val builder = AlertDialog.Builder(safeContext)
+        builder.setTitle("Authenticating")
+        builder.setMessage("Checking premium status...\n(Requires Internet)")
+        builder.setCancelable(false)
+        statusCheckDialog = builder.create()
+        statusCheckDialog?.show()
+    }
+
+    private fun hideStatusCheckDialog() {
+        statusCheckDialog?.dismiss()
+        statusCheckDialog = null
+    }
+
     private fun showLoadingDialog() {
+        if (loadingDialog?.isShowing == true) return
         val safeContext = context ?: return
         val builder = AlertDialog.Builder(safeContext)
         builder.setTitle("Generating Servers")
@@ -123,12 +145,17 @@ class TunnelListFragment : BaseFragment() {
 
         lifecycleScope.launch {
             premiumManager.checkTrialStatus(
+                onLoading = {
+                    // ရက်မကျန်ပါက အင်တာနက်မဖြစ်မနေစစ်ရန် Loading ပေါ်လာမည်
+                    lifecycleScope.launch { showStatusCheckDialog() }
+                },
                 onStatusResult = { daysLeft ->
                     lifecycleScope.launch {
+                        hideStatusCheckDialog()
+                        
                         userStatusText = "Premium ($daysLeft Days left)"
                         (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | $userStatusText"
                         
-                        // 🌟 SharedPreference ကိုသုံးပြီး တစ်ခါပဲ Generate လုပ်ရန် စစ်ဆေးခြင်း 🌟
                         val prefs = requireContext().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                         val hasGenerated = prefs.getBoolean("has_generated_servers", false)
                         
@@ -139,6 +166,8 @@ class TunnelListFragment : BaseFragment() {
                 },
                 onExpired = {
                     lifecycleScope.launch {
+                        hideStatusCheckDialog()
+                        
                         userStatusText = "EXPIRED"
                         (activity as? AppCompatActivity)?.supportActionBar?.subtitle = "ID: $deviceId | EXPIRED"
                         showPremiumExpiredDialog()
@@ -207,14 +236,17 @@ class TunnelListFragment : BaseFragment() {
             activity?.finish() 
         }
         
-        builder.setNeutralButton("Copy ID") { _, _ ->
+        builder.setNeutralButton("Copy ID", null)
+        
+        val dialog = builder.create()
+        dialog.show()
+
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
             val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             val clip = android.content.ClipData.newPlainText("Device ID", deviceId)
             clipboard.setPrimaryClip(clip)
             Toast.makeText(requireContext(), "Device ID Copied!", Toast.LENGTH_SHORT).show()
         }
-        
-        builder.show()
     }
 
     private fun connectTunnel(tunnel: ObservableTunnel) {
@@ -282,7 +314,6 @@ class TunnelListFragment : BaseFragment() {
                             val tunnelManager = Application.getTunnelManager()
                             val tunnels = tunnelManager.getTunnels()
                             
-                            // အဟောင်းများကို စစ်ဆေးဖျက်ပစ်မည်
                             tunnels.firstOrNull { it.name == "Server1" }?.let { tunnelManager.delete(it) }
                             tunnels.firstOrNull { it.name == "Server2" }?.let { tunnelManager.delete(it) }
                             
@@ -291,7 +322,6 @@ class TunnelListFragment : BaseFragment() {
                                 tunnelManager.create("Server2", config2)
                             }
                             
-                            // 🌟 အောင်မြင်သွားပါက နောက်တစ်ခါ ထပ်မထုတ်ရန် မှတ်သားပါမည် 🌟
                             val prefs = safeContext.getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                             prefs.edit().putBoolean("has_generated_servers", true).apply()
                             
