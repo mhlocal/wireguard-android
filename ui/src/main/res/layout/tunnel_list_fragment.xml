@@ -79,7 +79,7 @@
             android:layout_gravity="bottom|end"
             android:layout_margin="@dimen/fab_margin"
             android:nextFocusUp="@id/tunnel_list"
-            app:srcCompat="@drawable/ic_action_add_white" />
+            app:srcCompat="@drawable/ic_premium" />
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 </layout>
