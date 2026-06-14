@@ -358,7 +358,7 @@ class TunnelListFragment : BaseFragment() {
                             safeActivity.runOnUiThread {
                                 hideLoadingDialog()
                                 Log.e(TAG, "Save Error: ${e.message}", e)
-                                Toast.makeText(safeContext, "Failed to save servers: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(safeContext, "Failed to save servers: ${e.message}", Toast.LENGTH_).show()
                             }
                         }
                     }
@@ -457,7 +457,7 @@ class TunnelListFragment : BaseFragment() {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
                 
-                binding.root.setOnClickListener {
+               /* binding.root.setOnClickListener {
                     if (actionMode == null) {
                         selectedTunnel = item
                     } else {
@@ -468,7 +468,7 @@ class TunnelListFragment : BaseFragment() {
                 binding.root.setOnLongClickListener {
                     actionModeListener.toggleItemChecked(position)
                     true
-                }
+                }*/
                 
                 if (actionMode != null)
                     (binding.root as MultiselectableRelativeLayout).setMultiSelected(actionModeListener.checkedItems.contains(position))
