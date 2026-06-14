@@ -48,6 +48,7 @@ jobs:
           alias: ${{ secrets.SIGNING_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
+          buildToolsVersion: 34.0.0
 
       # 🌟 (၃) Sign လုပ်ပြီးသား Official APK ကို Download ရယူနိုင်ရန် တင်ပေးခြင်း 🌟
       - name: Upload Signed APK
