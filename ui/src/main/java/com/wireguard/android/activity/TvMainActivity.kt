@@ -55,7 +55,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import androidx.lifecycle.lifecycleScope
 import com.wireguard.config.Config
 import com.wireguard.config.Interface
 import com.wireguard.config.Peer
@@ -66,8 +65,6 @@ class TvMainActivity : AppCompatActivity() {
         override fun createIntent(context: Context, input: Array<String>): Intent {
             val intent = super.createIntent(context, input)
 
-            /* AndroidTV now comes with stubs that do nothing but display a Toast less helpful than
-             * what we can do, so detect this and throw an exception that we can catch later. */
             val activitiesToResolveIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.packageManager.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))
             } else {
@@ -250,57 +247,31 @@ class TvMainActivity : AppCompatActivity() {
         binding.executePendingBindings()
         setContentView(binding.root)
 
-        // =======================================================
-        // TV မျက်နှာပြင် ပွင့်လာတာနဲ့ WARP Config ကို Auto Generate လုပ်မည့်အပိုင်း
-        // =======================================================
-        val warpApi = WarpApiClient()
-        warpApi.generateWarpConfig(
-            onResult = { privateKey, address, endpoint ->
-                try {
-                    val configBuilder = Config.Builder()
-                    val interfaceBuilder = Interface.Builder()
-                    interfaceBuilder.parsePrivateKey(privateKey)
-                    interfaceBuilder.parseAddresses(address)
-                    interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
-                    interfaceBuilder.parseMtu("1280")
+        // 🌟 ယခင်က TV မှာ ရေးခဲ့သော 'WARP' ထုတ်သည့် Code ကြီးတစ်ခုလုံးကို ဖြုတ်ချလိုက်ပါပြီ 🌟
 
-                    val peerBuilder = Peer.Builder()
-                    peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=") 
-                    peerBuilder.parseEndpoint(endpoint)
-                    peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
-                    peerBuilder.parsePersistentKeepalive("25")
-
-                    configBuilder.setInterface(interfaceBuilder.build())
-                    configBuilder.addPeer(peerBuilder.build())
-                    val wgConfig = configBuilder.build()
-
-                    lifecycleScope.launch {
-                        try {
-                            val tunnelManager = Application.getTunnelManager()
-                            val existingTunnel = tunnelManager.getTunnels()["WARP"]
-                            if (existingTunnel != null) {
-                                tunnelManager.delete(existingTunnel)
-                            }
-                            val tunnel = tunnelManager.create("WARP", wgConfig)
-                            tunnelManager.setTunnelState(tunnel, Tunnel.State.UP)
-                            
-                            Toast.makeText(this@TvMainActivity, "Connected to WARP VPN!", Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Tunnel creation failed", e)
-                            Toast.makeText(this@TvMainActivity, "Failed to create VPN", Toast.LENGTH_SHORT).show()
-                        }
+        // 🌟 WARP အဟောင်းများရှိနေပါက အမြစ်ပြတ်ဖျက်ပစ်မည့် စနစ် 🌟
+        lifecycleScope.launch {
+            try {
+                val tunnels = Application.getTunnelManager().getTunnels()
+                tunnels.forEach { tunnel ->
+                    if (tunnel.state == Tunnel.State.UP) {
+                        Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.DOWN)
                     }
-                } catch (e: Exception) {
-                    Log.e("WARP_TV", "Config Error: ${e.message}")
                 }
-            },
-            onError = { errorMessage ->
-                runOnUiThread {
-                    Toast.makeText(this@TvMainActivity, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.IO) {
+                    tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }?.let { Application.getTunnelManager().delete(it) }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Cleanup old tunnels failed", e)
             }
-        )
-        // =======================================================
+        }
+
+        // 🌟 တစ်ခါမှ Server မထုတ်ရသေးလျှင် (SharedPrefs ကို စစ်၍) Server1 နှင့် Server2 ကို သီးသန့် ထုတ်ပေးပါမည် 🌟
+        val prefs = getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
+        val hasGenerated = prefs.getBoolean("has_generated_servers", false)
+        if (!hasGenerated && !isGenerating) {
+            generateDualServers()
+        }
 
         lifecycleScope.launch {
             while (true) {
@@ -308,6 +279,74 @@ class TvMainActivity : AppCompatActivity() {
                 delay(1000)
             }
         }
+    }
+
+    // 🌟 ဤနေရာတွင် Server1 နှင့် Server2 ကိုသာ သီးသန့်ဖန်တီးမည့် Function 🌟
+    private fun generateDualServers() {
+        if (isGenerating) return
+        isGenerating = true
+
+        val warpApi = WarpApiClient()
+        warpApi.generateWarpConfig(
+            onResult = { privateKey, address, _ -> 
+                lifecycleScope.launch {
+                    try {
+                        val config1 = buildWarpConfig(privateKey, address, "162.159.192.1:500")
+                        val config2 = buildWarpConfig(privateKey, address, "162.159.195.4:500")
+
+                        val tunnelManager = Application.getTunnelManager()
+                        val tunnels = tunnelManager.getTunnels()
+
+                        withContext(Dispatchers.IO) {
+                            tunnels.firstOrNull { it.name == "Server1" }?.let { tunnelManager.delete(it) }
+                            tunnels.firstOrNull { it.name == "Server2" }?.let { tunnelManager.delete(it) }
+
+                            val t1 = tunnelManager.create("Server1", config1)
+                            val t2 = tunnelManager.create("Server2", config2)
+
+                            // Auto ချိတ်မသွားစေရန် အသေပိတ်ထားမည်
+                            tunnelManager.setTunnelState(t1, Tunnel.State.DOWN)
+                            tunnelManager.setTunnelState(t2, Tunnel.State.DOWN)
+                        }
+
+                        // အောင်မြင်သွားပါက နောက်ထပ်မလုပ်ရန် မှတ်ဉာဏ်တွင် အသေမှတ်မည်
+                        val prefs = getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
+                        prefs.edit().putBoolean("has_generated_servers", true).apply()
+
+                        isGenerating = false
+                        Toast.makeText(this@TvMainActivity, "Servers generated successfully!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        isGenerating = false
+                        Log.e(TAG, "Save Error: ${e.message}", e)
+                    }
+                }
+            },
+            onError = { errorMessage ->
+                isGenerating = false
+                runOnUiThread {
+                    Toast.makeText(this@TvMainActivity, "API Error: $errorMessage", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
+    }
+
+    private fun buildWarpConfig(privateKey: String, address: String, endpoint: String): Config {
+        val configBuilder = Config.Builder()
+        val interfaceBuilder = Interface.Builder()
+        interfaceBuilder.parsePrivateKey(privateKey)
+        interfaceBuilder.parseAddresses(address)
+        interfaceBuilder.parseDnsServers("1.1.1.1, 1.0.0.1")
+        interfaceBuilder.parseMtu("1280") 
+
+        val peerBuilder = Peer.Builder()
+        peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+        peerBuilder.parseEndpoint(endpoint)
+        peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
+        peerBuilder.parsePersistentKeepalive("25") 
+
+        configBuilder.setInterface(interfaceBuilder.build())
+        configBuilder.addPeer(peerBuilder.build())
+        return configBuilder.build()
     }
 
     private var pendingNavigation: File? = null
@@ -484,5 +523,8 @@ class TvMainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "WireGuard/TvMainActivity"
+        
+        // 🌟 TV တွင်လည်း ထပ်ခါထပ်ခါ မထုတ်စေရန် ကာကွယ်ခြင်း 🌟
+        private var isGenerating = false
     }
 }
