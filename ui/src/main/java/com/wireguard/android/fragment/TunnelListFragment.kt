@@ -137,6 +137,19 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
+        // 🌟 ယခင်က စမ်းသပ်ခဲ့သော 'WARP' Tunnel အဟောင်းကြီးကို အလိုလို ရှင်းလင်းပေးမည့်အပိုင်း 🌟
+        lifecycleScope.launch {
+            try {
+                val tunnels = Application.getTunnelManager().getTunnels()
+                withContext(Dispatchers.IO) {
+                    tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }?.let { Application.getTunnelManager().delete(it) }
+                    tunnels.firstOrNull { it.name == "Server 1" }?.let { Application.getTunnelManager().delete(it) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Cleanup old tunnels failed", e)
+            }
+        }
+
         val premiumManager = PremiumManager(requireContext())
         val deviceId = android.provider.Settings.Secure.getString(requireContext().contentResolver, android.provider.Settings.Secure.ANDROID_ID)
 
@@ -155,6 +168,7 @@ class TunnelListFragment : BaseFragment() {
                         val prefs = Application.get().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
                         val hasGenerated = prefs.getBoolean("has_generated_servers", false)
                         
+                        // တစ်ခါမှ မထုတ်ရသေးမှသာ အသစ်ထုတ်ပေးမည်
                         if (!hasGenerated && !isGenerating) {
                             generateDualServers()
                         }
@@ -371,12 +385,12 @@ class TunnelListFragment : BaseFragment() {
         return configBuilder.build()
     }
 
-    // 🌟 ဤနေရာတွင် Auto ချိတ်ခြင်းကို ကာကွယ်ရန် လော့ဂျစ်အသစ် ပြောင်းထားပါသည် 🌟
+    // 🌟 Auto ချိတ်ခြင်းကို ကာကွယ်ရန် သီးသန့် Logic (UI လည်ထွက်ခြင်းကို တားဆီးထားသည်) 🌟
     fun onSwitchChanged(view: View, checked: Boolean) {
         val tunnel = view.tag as? ObservableTunnel ?: return 
         
-        // လက်ရှိ VPN ၏ အခြေအနေ (ပွင့်/ပိတ်) နှင့် Switch မှ တောင်းဆိုသည့် အခြေအနေ တူညီနေပါက
-        // System က Auto ပြောင်းလဲပေးခြင်းသာဖြစ်၍ ဘာမှမလုပ်ဘဲ လျစ်လျူရှုပါမည်။
+        // DataBinding ကနေ UI ကို Update လုပ်ပေးတဲ့အခါမှာ ခလုတ်အနှိပ်ခံရသလို Auto ဝင်လာတတ်ပါတယ်။
+        // ဒါကြောင့် အစစ်အမှန် အခြေအနေနဲ့ တူနေရင် (ဥပမာ - ပိတ်ထားတာကို ပိတ်တယ်လို့ ထပ်ပို့ရင်) လျစ်လျူရှုပါမည်။
         val isCurrentlyUp = tunnel.state == Tunnel.State.UP
         if (checked == isCurrentlyUp) return
         
@@ -598,7 +612,6 @@ class TunnelListFragment : BaseFragment() {
         private const val CHECKED_ITEMS = "CHECKED_ITEMS"
         private const val TAG = "WireGuard/TunnelListFragment"
         
-        // ထပ်ခါထပ်ခါ Generate လုပ်ခြင်းကို တားဆီးပေးမည့် ကာကွယ်ရေး Variable
         private var isGenerating = false
     }
 }
