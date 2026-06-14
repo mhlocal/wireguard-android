@@ -15,6 +15,13 @@ android {
         viewBinding = true
     }
 
+externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.10.2"
+        }
+    }
+
 
     namespace = pkg
     defaultConfig {
