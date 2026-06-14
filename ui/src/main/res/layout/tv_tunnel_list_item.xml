@@ -39,7 +39,7 @@
         android:layout_marginBottom="0dp"
         android:backgroundTint="@color/tv_list_item_tint"
         android:checkable="true"
-        android:focusable="true"
+        android:focusable="false"
         app:contentPadding="8dp"
         app:isDeleting="@{isDeleting}"
         app:isUp="@{item.state == State.UP}">
@@ -53,6 +53,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@{item.name}"
+                android:focusable="false"
                 android:textAppearance="?attr/textAppearanceTitleLarge"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
