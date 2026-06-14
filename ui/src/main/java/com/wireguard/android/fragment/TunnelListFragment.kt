@@ -138,16 +138,20 @@ class TunnelListFragment : BaseFragment() {
         }
 
         // 🌟 WARP အဟောင်းများရှိနေပါက အမြစ်ပြတ်ဖျက်ပစ်မည့် စနစ် 🌟
+        // 🌟 WARP အဟောင်းများရှိနေပါက ရှင်းလင်းမည့် စနစ် (ပြင်ဆင်ပြီး) 🌟
         lifecycleScope.launch {
             try {
                 val tunnels = Application.getTunnelManager().getTunnels()
-                tunnels.forEach { tunnel ->
-                    if (tunnel.state == Tunnel.State.UP) {
-                        Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.DOWN)
+                
+                // ❌ အရင်လို VPN အားလုံးကို မပိတ်တော့ဘဲ "WARP" အဟောင်းကိုသာ သီးသန့်ရှာပြီး ပိတ်/ဖျက်မည်
+                val oldWarp = tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }
+                if (oldWarp != null) {
+                    if (oldWarp.state == Tunnel.State.UP) {
+                        Application.getTunnelManager().setTunnelState(oldWarp, Tunnel.State.DOWN)
                     }
-                }
-                withContext(Dispatchers.IO) {
-                    tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }?.let { Application.getTunnelManager().delete(it) }
+                    withContext(Dispatchers.IO) {
+                        Application.getTunnelManager().delete(oldWarp)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Cleanup old tunnels failed", e)
