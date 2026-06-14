@@ -9,7 +9,6 @@
         <import type="com.wireguard.android.backend.Tunnel.State" />
         <import type="android.graphics.Color" /> 
         
-        <!-- Kotlin မှ isConnecting ကို လှမ်းခေါ်ရန် Fragment Variable အသစ်ထည့်ထားပါသည် -->
         <variable
             name="fragment"
             type="com.wireguard.android.fragment.TunnelListFragment" />
@@ -39,7 +38,8 @@
         android:layout_marginBottom="0dp"
         android:backgroundTint="@color/tv_list_item_tint"
         android:checkable="true"
-        android:focusable="false"
+        android:focusable="true"
+        android:descendantFocusability="blocksDescendants" 
         app:contentPadding="8dp"
         app:isDeleting="@{isDeleting}"
         app:isUp="@{item.state == State.UP}">
@@ -53,13 +53,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@{item.name}"
-                android:focusable="false"
                 android:textAppearance="?attr/textAppearanceTitleLarge"
+                android:focusable="false" 
+                android:clickable="false"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 tools:text="WARP VPN" />
 
-            <!-- Connecting နှင့် Connected အရောင်ပြောင်းမည့် ညာဘက်အပေါ်ထောင့်က စာသား -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tunnel_status"
                 android:layout_width="wrap_content"
@@ -67,6 +67,8 @@
                 android:text='@{fragment.isConnecting(item) ? "Connecting..." : (item.state == State.UP ? "Connected" : "Connect")}'
                 android:textColor='@{fragment.isConnecting(item) ? Color.parseColor("#FFA000") : (item.state == State.UP ? Color.parseColor("#00C853") : Color.parseColor("#808080"))}'
                 android:textStyle="bold"
+                android:focusable="false"
+                android:clickable="false"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 tools:text="Connected" />
@@ -77,6 +79,7 @@
                 android:layout_height="wrap_content"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:visibility="@{isDeleting ? View.GONE : View.VISIBLE}"
+                android:focusable="false"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 tools:text="rx: 200 MB, tx: 100 MB" />
@@ -87,6 +90,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/tv_delete"
                 android:visibility="@{(isDeleting &amp;&amp; isFocused) ? View.VISIBLE : View.GONE}"
+                android:focusable="false"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 tools:visibility="gone" />
