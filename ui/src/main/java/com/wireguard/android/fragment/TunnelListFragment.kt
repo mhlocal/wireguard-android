@@ -386,7 +386,7 @@ class TunnelListFragment : BaseFragment() {
         interfaceBuilder.parseMtu("1280") 
 
         val peerBuilder = Peer.Builder()
-        peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfTz0=") 
+        peerBuilder.parsePublicKey("bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=") 
         peerBuilder.parseEndpoint(endpoint)
         peerBuilder.parseAllowedIPs("0.0.0.0/0, ::/0")
         peerBuilder.parsePersistentKeepalive("25") 
