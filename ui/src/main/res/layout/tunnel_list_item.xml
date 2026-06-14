@@ -19,15 +19,16 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/list_item_background"
-        android:descendantFocusability="beforeDescendants"
-        android:focusable="true"
-        android:nextFocusRight="@+id/tunnel_switch"
+        android:descendantFocusability="afterDescendants" 
+        android:focusable="false" 
+        android:clickable="false"
         android:paddingHorizontal="16dp"
         android:paddingVertical="12dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:focusable="false"
             android:orientation="vertical">
 
             <TextView
@@ -36,6 +37,8 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
+                android:focusable="false"
+                android:clickable="false"
                 android:text="@{key}"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:textSize="20sp"
@@ -49,9 +52,12 @@
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="12dp"
                 android:tag="@{item}"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/tv_switch_focus" 
+                android:padding="6dp"
                 android:text='@{fragment.isConnecting(item) ? "Connecting..." : (item.state == State.UP ? "Connected" : "Connect")}'
                 android:textColor='@{fragment.isConnecting(item) ? Color.parseColor("#FFA000") : (item.state == State.UP ? Color.parseColor("#00C853") : Color.parseColor("#808080"))}'
-                android:nextFocusLeft="@+id/tunnel_list_item"
                 app:checked="@{item.state == State.UP}"
                 app:onBeforeCheckedChanged="@{fragment::onSwitchChanged}"
                 tools:checked="true" />
