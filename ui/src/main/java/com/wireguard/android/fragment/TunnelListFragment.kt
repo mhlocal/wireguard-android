@@ -137,13 +137,19 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        // 🌟 ယခင်က စမ်းသပ်ခဲ့သော 'WARP' Tunnel အဟောင်းကြီးကို အလိုလို ရှင်းလင်းပေးမည့်အပိုင်း 🌟
+        // 🌟 အရေးကြီးသော ပြင်ဆင်ချက် - App ဖွင့်ဖွင့်ချင်းတွင် ပွင့်နေသော VPN များရှိပါက အတင်းလိုက်ပိတ်မည် 🌟
         lifecycleScope.launch {
             try {
                 val tunnels = Application.getTunnelManager().getTunnels()
+                tunnels.forEach { tunnel ->
+                    if (tunnel.state == Tunnel.State.UP) {
+                        Application.getTunnelManager().setTunnelState(tunnel, Tunnel.State.DOWN)
+                    }
+                }
+                
+                // "WARP" ဆိုသည့် Tunnel အဟောင်း ကျန်နေသေးပါက အပြီးတိုင် ဖျက်ပစ်မည်
                 withContext(Dispatchers.IO) {
                     tunnels.firstOrNull { it.name.equals("WARP", ignoreCase = true) }?.let { Application.getTunnelManager().delete(it) }
-                    tunnels.firstOrNull { it.name == "Server 1" }?.let { Application.getTunnelManager().delete(it) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Cleanup old tunnels failed", e)
@@ -330,8 +336,12 @@ class TunnelListFragment : BaseFragment() {
                             tunnels.firstOrNull { it.name == "Server2" }?.let { tunnelManager.delete(it) }
                             
                             withContext(Dispatchers.IO) {
-                                tunnelManager.create("Server1", config1)
-                                tunnelManager.create("Server2", config2)
+                                val t1 = tunnelManager.create("Server1", config1)
+                                val t2 = tunnelManager.create("Server2", config2)
+                                
+                                // 🌟 Server အသစ် ထုတ်ပြီးသည်နှင့် အလိုလို ပွင့်မလာစေရန် အတင်းပိတ်ချမည် 🌟
+                                tunnelManager.setTunnelState(t1, Tunnel.State.DOWN)
+                                tunnelManager.setTunnelState(t2, Tunnel.State.DOWN)
                             }
                             
                             val prefs = Application.get().getSharedPreferences("VPN_PREFS", Context.MODE_PRIVATE)
@@ -385,12 +395,11 @@ class TunnelListFragment : BaseFragment() {
         return configBuilder.build()
     }
 
-    // 🌟 Auto ချိတ်ခြင်းကို ကာကွယ်ရန် သီးသန့် Logic (UI လည်ထွက်ခြင်းကို တားဆီးထားသည်) 🌟
+    // 🌟 Double Protection: User က လက်ဖြင့် အမှန်တကယ် နှိပ်မှသာ အလုပ်လုပ်စေမည် 🌟
     fun onSwitchChanged(view: View, checked: Boolean) {
-        val tunnel = view.tag as? ObservableTunnel ?: return 
+        if (!view.isPressed) return // System က အလိုလို ပြောင်းပေးတာကို လုံးဝ လက်မခံပါ
         
-        // DataBinding ကနေ UI ကို Update လုပ်ပေးတဲ့အခါမှာ ခလုတ်အနှိပ်ခံရသလို Auto ဝင်လာတတ်ပါတယ်။
-        // ဒါကြောင့် အစစ်အမှန် အခြေအနေနဲ့ တူနေရင် (ဥပမာ - ပိတ်ထားတာကို ပိတ်တယ်လို့ ထပ်ပို့ရင်) လျစ်လျူရှုပါမည်။
+        val tunnel = view.tag as? ObservableTunnel ?: return 
         val isCurrentlyUp = tunnel.state == Tunnel.State.UP
         if (checked == isCurrentlyUp) return
         
