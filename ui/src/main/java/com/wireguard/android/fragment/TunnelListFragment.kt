@@ -150,11 +150,11 @@ class TunnelListFragment : BaseFragment() {
             }
         }
 
-        // App စဖွင့်သည်နှင့် Server 1 နှင့် Server 2 ရှိ/မရှိ စစ်ဆေးပြီး မရှိပါက အသစ်ထုတ်ပေးမည်
         lifecycleScope.launch {
             val tunnels = Application.getTunnelManager().getTunnels()
-            val hasServer1 = tunnels.containsKey("Server 1")
-            val hasServer2 = tunnels.containsKey("Server 2")
+            // 🌟 ပြင်ဆင်ချက် - Space မပါသော နာမည်များကို အသုံးပြုပါမည် 🌟
+            val hasServer1 = tunnels.containsKey("Server1")
+            val hasServer2 = tunnels.containsKey("Server2")
 
             if (!hasServer1 && !hasServer2) {
                 generateDualServers()
@@ -272,9 +272,6 @@ class TunnelListFragment : BaseFragment() {
         }
     }
 
-    // ---------------------------------------------------------------------------------
-    // API မှ ရရှိသော Key များကို အသုံးပြု၍ Server 1 နှင့် Server 2 ကို ထုတ်ပေးမည့် အပိုင်း
-    // ---------------------------------------------------------------------------------
     private fun generateDualServers() {
         val safeContext = context ?: return
         val safeActivity = activity ?: return
@@ -282,11 +279,9 @@ class TunnelListFragment : BaseFragment() {
         safeActivity.runOnUiThread { showLoadingDialog() }
 
         val warpApi = WarpApiClient()
-        // API မှ ပြန်လာသော မူလ endpoint ကို မယူဘဲ (_) အဖြစ် လျစ်လျူရှုထားပါမည်။
         warpApi.generateWarpConfig(
             onResult = { privateKey, address, _ -> 
                 try {
-                    // သတ်မှတ်ပေးထားသော ကိုယ်ပိုင် IP နှင့် Port များကိုသာ သုံးပြီး Config ၂ ခု ဆောက်ပါမည်
                     val config1 = buildWarpConfig(privateKey, address, "162.159.192.1:500")
                     val config2 = buildWarpConfig(privateKey, address, "162.159.195.4:500")
 
@@ -294,14 +289,16 @@ class TunnelListFragment : BaseFragment() {
                         try {
                             val tunnelManager = Application.getTunnelManager()
                             
-                            // အဟောင်းများရှိပါက အရင်ဖျက်ပါမည်
-                            tunnelManager.getTunnels()["Server 1"]?.let { tunnelManager.delete(it) }
-                            tunnelManager.getTunnels()["Server 2"]?.let { tunnelManager.delete(it) }
-                            tunnelManager.getTunnels()["WARP"]?.let { tunnelManager.delete(it) } // ယခင် WARP အဟောင်းကျန်နေပါက ဖျက်ရန်
+                            // 🌟 ပြင်ဆင်ချက် - Space မပါသော နာမည်များကို အသုံးပြုပါမည် 🌟
+                            tunnelManager.getTunnels()["Server1"]?.let { tunnelManager.delete(it) }
+                            tunnelManager.getTunnels()["Server2"]?.let { tunnelManager.delete(it) }
+                            tunnelManager.getTunnels()["WARP"]?.let { tunnelManager.delete(it) } 
                             
-                            // Server 1 နှင့် Server 2 ကို App ထဲသို့ သိမ်းပါမည်
-                            tunnelManager.create("Server 1", config1)
-                            tunnelManager.create("Server 2", config2)
+                            // Background Database Process ဖြစ်၍ I/O Thread ပေါ်တွင် အလုပ်လုပ်စေပါမည်
+                            withContext(Dispatchers.IO) {
+                                tunnelManager.create("Server1", config1)
+                                tunnelManager.create("Server2", config2)
+                            }
                             
                             safeActivity.runOnUiThread { 
                                 hideLoadingDialog() 
@@ -310,7 +307,8 @@ class TunnelListFragment : BaseFragment() {
                         } catch (e: Exception) {
                             safeActivity.runOnUiThread {
                                 hideLoadingDialog()
-                                Toast.makeText(safeContext, "Failed to save servers", Toast.LENGTH_SHORT).show()
+                                Log.e(TAG, "Save Error: ${e.message}", e)
+                                Toast.makeText(safeContext, "Failed to save servers: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         }
                     }
@@ -327,7 +325,6 @@ class TunnelListFragment : BaseFragment() {
         )
     }
 
-    // WARP Config အလွတ်တည်ဆောက်ပေးမည့် Helper Function
     private fun buildWarpConfig(privateKey: String, address: String, endpoint: String): Config {
         val configBuilder = Config.Builder()
         val interfaceBuilder = Interface.Builder()
