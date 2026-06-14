@@ -11,9 +11,18 @@ import java.io.IOException
 class WarpApiClient {
     private val client = OkHttpClient()
 
-    // သင့်ရဲ့ Proxy URL နှစ်ခုကို ဒီနေရာမှာ ထည့်ပါ
-    private val proxyUrl1 = "https://api.cloudflareclient.com//v0a884/reg"
-    private val proxyUrl2 = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg"
+    // 🌟 C++ Library ကို ချိတ်ဆက်ခြင်း 🌟
+    init {
+        System.loadLibrary("api-keys")
+    }
+
+    // 🌟 C++ ထဲမှ Function များကို လှမ်းခေါ်ရန် ကြေညာခြင်း 🌟
+    private external fun getProxyUrl1(): String
+    private external fun getProxyUrl2(): String
+
+    // 🌟 C++ မှ ဖျောက်ထားသော URL များကို ရယူခြင်း 🌟
+    private val proxyUrl1 = getProxyUrl1()
+    private val proxyUrl2 = getProxyUrl2()
 
     fun generateWarpConfig(onResult: (privateKey: String, address: String, endpoint: String) -> Unit, onError: (String) -> Unit) {
         val keyPair = KeyPair()
