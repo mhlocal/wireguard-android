@@ -152,7 +152,6 @@ class TunnelListFragment : BaseFragment() {
 
         lifecycleScope.launch {
             val tunnels = Application.getTunnelManager().getTunnels()
-            // 🌟 ပြင်ဆင်ချက် - Space မပါသော နာမည်များကို အသုံးပြုပါမည် 🌟
             val hasServer1 = tunnels.containsKey("Server1")
             val hasServer2 = tunnels.containsKey("Server2")
 
@@ -289,12 +288,10 @@ class TunnelListFragment : BaseFragment() {
                         try {
                             val tunnelManager = Application.getTunnelManager()
                             
-                            // 🌟 ပြင်ဆင်ချက် - Space မပါသော နာမည်များကို အသုံးပြုပါမည် 🌟
                             tunnelManager.getTunnels()["Server1"]?.let { tunnelManager.delete(it) }
                             tunnelManager.getTunnels()["Server2"]?.let { tunnelManager.delete(it) }
                             tunnelManager.getTunnels()["WARP"]?.let { tunnelManager.delete(it) } 
                             
-                            // Background Database Process ဖြစ်၍ I/O Thread ပေါ်တွင် အလုပ်လုပ်စေပါမည်
                             withContext(Dispatchers.IO) {
                                 tunnelManager.create("Server1", config1)
                                 tunnelManager.create("Server2", config2)
@@ -400,6 +397,15 @@ class TunnelListFragment : BaseFragment() {
         binding!!.rowConfigurationHandler = object : RowConfigurationHandler<TunnelListItemBinding, ObservableTunnel> {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
+                
+                // 🌟 ဒီနေရာမှာ ရိုးရိုး Click ကို ပြန်ထည့်ပေးလိုက်ပါပြီ 🌟
+                binding.root.setOnClickListener {
+                    if (actionMode == null) {
+                        selectedTunnel = item
+                    } else {
+                        actionModeListener.toggleItemChecked(position)
+                    }
+                }
                 
                 binding.root.setOnLongClickListener {
                     actionModeListener.toggleItemChecked(position)
