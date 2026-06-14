@@ -63,7 +63,7 @@ class WarpApiClient {
                             val interfaceInfo = config.getJSONObject("interface")
                             val address = interfaceInfo.getJSONObject("addresses").getString("v4") + "/32"
                             
-                            val endpoint = "engage.cloudflareclient.com:2408" 
+                            val endpoint = "engage.cloudflareclient.com:500" 
 
                             onResult(privateKeyBase64, address, endpoint)
                         } catch (e: Exception) {
