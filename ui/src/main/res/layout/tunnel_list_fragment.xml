@@ -81,9 +81,9 @@
             
             android:focusable="true"
             android:clickable="true"
-            android:foreground="@drawable/ic_premium"
+            android:foreground="@drawable/ic_fab_focus"
             
-            app:srcCompat="@drawable/ic_action_add" />
+            app:srcCompat="@drawable/ic_premium" />
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 </layout>
