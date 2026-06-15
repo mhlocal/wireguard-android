@@ -227,7 +227,7 @@ class TunnelListFragment : BaseFragment() {
                 premiumDialog.show()
             }
             executePendingBindings()
-            snackbarUpdateShower.attach(mainContainer, createFab)
+            
         }
         backPressedCallback = requireActivity().onBackPressedDispatcher.addCallback(this) { actionMode?.finish() }
         backPressedCallback?.isEnabled = false
