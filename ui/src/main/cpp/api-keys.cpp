@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <string>
+#include <stdlib.h> // 🌟 exit(0) သုံးရန် ဤ Header ကို ထည့်ထားပါသည်
 
 // ==========================================
 // 🌟 App ၏ Signature ကို စစ်ဆေးသည့် စနစ် (Mod ကာကွယ်ရေး) 🌟
@@ -42,17 +43,21 @@ bool isValidApp(JNIEnv* env, jobject context) {
 // ==========================================
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_wireguard_android_PremiumManager_getSupabaseUrl(JNIEnv* env, jobject /* this */, jobject context) {
-    // Hash မတူပါက (Mod ထားပါက) Fake URL ပြန်ပေးမည်
-    if (!isValidApp(env, context)) return env->NewStringUTF("https://fake-url.supabase.co/modded");
+    // Hash မတူပါက (Mod ထားပါက) App ကို ချက်ချင်း ပိတ်ချမည်
+    if (!isValidApp(env, context)) {
+        exit(0); 
+    }
     
-    // မှန်ကန်ပါက အောက်ပါ URL အစစ်ကို ပြန်ပေးမည်
+    // မှန်ကန်မှသာ အောက်ပါ URL အစစ်ကို ပြန်ပေးမည်
     std::string url = "https://hmjmyoqkvqwjhqdnlamf.supabase.co/rest/v1/devices"; 
     return env->NewStringUTF(url.c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_wireguard_android_PremiumManager_getSupabaseKey(JNIEnv* env, jobject /* this */, jobject context) {
-    if (!isValidApp(env, context)) return env->NewStringUTF("FAKE_API_KEY");
+    if (!isValidApp(env, context)) {
+        exit(0); 
+    }
     
     std::string key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtam15b3FrdnF3amhxZG5sYW1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTY3NjMsImV4cCI6MjA5Njk5Mjc2M30.CXgn9jMN1tq9QczoMxmgpL9DzrfF5ah4ncFN1fSBsCU"; 
     return env->NewStringUTF(key.c_str());
@@ -64,7 +69,9 @@ Java_com_wireguard_android_PremiumManager_getSupabaseKey(JNIEnv* env, jobject /*
 // ==========================================
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_wireguard_android_WarpApiClient_getProxyUrl1(JNIEnv* env, jobject /* this */, jobject context) {
-    if (!isValidApp(env, context)) return env->NewStringUTF("https://google.com");
+    if (!isValidApp(env, context)) {
+        exit(0); 
+    }
     
     std::string url = "https://api.cloudflareclient.com//v0a884/reg";
     return env->NewStringUTF(url.c_str());
@@ -72,7 +79,9 @@ Java_com_wireguard_android_WarpApiClient_getProxyUrl1(JNIEnv* env, jobject /* th
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_wireguard_android_WarpApiClient_getProxyUrl2(JNIEnv* env, jobject /* this */, jobject context) {
-    if (!isValidApp(env, context)) return env->NewStringUTF("https://google.com");
+    if (!isValidApp(env, context)) {
+        exit(0); 
+    }
     
     std::string url = "https://yitgwcdttttjrnqtdncy.supabase.co/functions/v1/bright-worker/v0a5311/reg";
     return env->NewStringUTF(url.c_str());
