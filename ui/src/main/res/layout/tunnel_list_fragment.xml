@@ -81,7 +81,7 @@
             
             android:focusable="true"
             android:clickable="true"
-            android:foreground="@drawable/ic_fab_focus"
+            android:foreground="@drawable/tv_fab_focus"
             
             app:srcCompat="@drawable/ic_premium" />
 
