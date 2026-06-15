@@ -25,7 +25,9 @@ externalNativeBuild {
 
     namespace = pkg
     defaultConfig {
-        applicationId = pkg
+        // 🌟 မူလ `applicationId = pkg` အစား မိမိလိုချင်သော နာမည်ကို တိုက်ရိုက်ရေးထည့်ပါ 🌟
+        applicationId = "com.wireguard.android.mh" 
+        
         minSdk = 24
         versionCode = providers.gradleProperty("wireguardVersionCode").get().toInt()
         versionName = providers.gradleProperty("wireguardVersionName").get()
