@@ -460,34 +460,29 @@ class TunnelListFragment : BaseFragment() {
             override fun onConfigureRow(binding: TunnelListItemBinding, item: ObservableTunnel, position: Int) {
                 binding.fragment = this@TunnelListFragment
                 
-                // 🌟 Click နှင့် Long Click ကို လုံးဝ (Ripple Effect ပါမကျန်) အပြီးတိုင် ပိတ်ချခြင်း 🌟
+                // ဘောက်စ်အကြီးကြီးကို Focus လုံးဝမယူစေရန်
+                binding.root.isFocusable = false
                 binding.root.isClickable = false
-                binding.root.isLongClickable = false
-
+                
+                // စာသားများကို Focus လုံးဝမယူစေရန်
                 binding.tunnelName.isFocusable = false
                 
-                // 🌟 Switch (သို့) နှိပ်စေချင်သော နေရာကိုသာ Focus ပေးရန် 🌟
+                // Switch (သို့) နှိပ်စေချင်သော နေရာကိုသာ Focus ပေးရန်
                 binding.tunnelSwitch.isFocusable = true
                 binding.tunnelSwitch.isClickable = true
 
-               /* binding.root.setOnClickListener {
-                    if (actionMode == null) {
-                        selectedTunnel = item
-                    } else {
-                        actionModeListener.toggleItemChecked(position)
+                // 🌟 App ဖွင့်ဖွင့်ချင်း ပထမဆုံး Server ၏ Switch ထံသို့ Focus အလိုလိုရောက်နေစေရန် 🌟
+                if (position == 0) {
+                    binding.tunnelSwitch.post {
+                        binding.tunnelSwitch.requestFocus()
                     }
                 }
-                
-                binding.root.setOnLongClickListener {
-                    actionModeListener.toggleItemChecked(position)
-                    true
-                }*/
-                
+
                 if (actionMode != null)
                     (binding.root as MultiselectableRelativeLayout).setMultiSelected(actionModeListener.checkedItems.contains(position))
                 else
                     (binding.root as MultiselectableRelativeLayout).setSingleSelected(selectedTunnel == item)
-           }
+            }
         }
 
     }
