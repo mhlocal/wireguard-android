@@ -56,7 +56,9 @@
                 android:tag="@{item}"
                 android:focusable="true"
                 android:clickable="true"
-                android:background="@drawable/tv_switch_focus" 
+                
+                android:foreground="@drawable/tv_switch_focus" 
+                
                 android:padding="6dp"
                 android:text='@{fragment.isConnecting(item) ? "Connecting..." : (item.state == State.UP ? "Connected" : "Connect")}'
                 android:textColor='@{fragment.isConnecting(item) ? Color.parseColor("#FFA000") : (item.state == State.UP ? Color.parseColor("#00C853") : Color.parseColor("#808080"))}'
